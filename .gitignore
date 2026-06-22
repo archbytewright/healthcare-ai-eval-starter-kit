@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Generated evaluation output (reports are produced at run time, not tracked)
+output/
+reports/*.md
+!reports/.gitkeep
+
+# Private working config never ships; the public spec lives in README.md + framework/.
+.claude/
+
+# Private working notes (never published).
+OPERATOR-NOTES.md
+
+# Internal canon-reconciliation working doc (never published).
+framework/canon-alignment.md
+
+# Local secret-scan artifacts.
+.opsec/
+
+# Secrets / env (this kit ships no secrets, but guard the pattern)
+secrets.env
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+BUILD-REPORT.md
