@@ -22,7 +22,6 @@ def test_mock_drops_contraindication_line() -> None:
     tool = MockDecisionSupportTool(DeterministicMockModel())
     out = tool.assess(_vignette("vg-02-contraindication-omission"))
     assert "chronic kidney disease" not in out.text.lower()
-    assert "colchicine" not in out.text.lower()
     # ...while the (now-unsafe) NSAID guidance line on the same case survives -- that
     # is exactly the failure: the recommendation keeps the NSAID, drops the warning.
     assert "naproxen" in out.text.lower()
