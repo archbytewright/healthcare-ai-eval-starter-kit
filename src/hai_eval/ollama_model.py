@@ -3,7 +3,7 @@ can run against a *live* local LLM, not only the deterministic mock.
 
 This is what turns the kit from a *method promise* into a *method demonstration*: the
 same ``MockModel`` seam (``generate(system, user) -> str``), filled by a real model, so
-the evaluator's probes score an actual model's behaviour on the synthetic vignettes.
+the evaluator's probes score an actual model's behavior on the synthetic vignettes.
 
 Local inference by design -- the model runs against a local Ollama instance (host set via
 the ``OLLAMA_HOST`` environment variable, default ``http://localhost:11434``), so no

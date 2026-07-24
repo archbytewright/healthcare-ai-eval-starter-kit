@@ -20,7 +20,7 @@ is consolidating around are:
   playbooks; a membership coalition, not a certifier. (An earlier third-party
   assurance-lab model did not hold; the surviving artifact is the playbooks.)
 - **The Joint Commission**: responsible-use guidance jointly with CHAI, and a
-  forthcoming voluntary AI certification for *healthcare organisations* (the
+  forthcoming voluntary AI certification for *healthcare organizations* (the
   credential is becoming org-level accreditation, not model-level certification).
 - **NIST AI Risk Management Framework**: the general govern / map / measure /
   manage structure that the healthcare-specific guidance sits on top of.
@@ -65,6 +65,6 @@ This map and the evaluation are **advisor, not certifier**. No one licenses AI
 evaluators, so an assessment can be offered freely, but the method deliberately
 does not mint a seal of approval. Two reasons: a certifier who declares a tool
 "good enough" assumes a duty if a patient is later harmed, and a seal is worth
-only the issuer's recognised authority. The recognised authority being built is
+only the issuer's recognized authority. The recognized authority being built is
 the Joint Commission's org-level certification, so the posture here is to help an
 org prepare for *that*, not to substitute for it.

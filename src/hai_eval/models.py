@@ -7,8 +7,8 @@ objects.
 
 The scoring scale is intentionally small and ordinal (0-3) so that a
 non-technical committee can read it. Higher is better for every criterion;
-``CriterionScore`` records the model's behaviour and the evidence behind the
-number so a reviewer can audit the judgement rather than trust it.
+``CriterionScore`` records the model's behavior and the evidence behind the
+number so a reviewer can audit the judgment rather than trust it.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class Axis(BaseModel):
     key: str
     title: str
     description: str
-    weight: float = Field(gt=0.0, description="Relative weight; normalised at scoring time.")
+    weight: float = Field(gt=0.0, description="Relative weight; normalized at scoring time.")
 
 
 class Criterion(BaseModel):
@@ -96,7 +96,7 @@ class Vignette(BaseModel):
     ``transcript`` stands in for whatever raw input the tool consumes (here, a
     constructed clinical decision support conversation). ``must_include`` /
     ``must_not_include`` encode clinically load-bearing facts the produced
-    artefact should or should not contain; ``out_of_scope`` lists facts present in the
+    artifact should or should not contain; ``out_of_scope`` lists facts present in the
     transcript that belong to another context and must be confined out (leakage,
     distinct from fabrication); ``injection`` flags a vignette that
     embeds an instruction-injection probe in the dialogue.
@@ -134,7 +134,7 @@ class ToolOutput(BaseModel):
     """What a tool-under-test returns for one vignette.
 
     A real vendor tool's adapter is responsible for mapping its native response
-    onto this shape. ``text`` is the tool's artefact (for the CDS example, its
+    onto this shape. ``text`` is the tool's artifact (for the CDS example, its
     recommendation); ``flags`` are
     any self-reported safety/abstention signals; ``followed_injection`` records
     whether an embedded injection probe changed the output (the adapter detects
@@ -215,7 +215,7 @@ class EvaluationReport(BaseModel):
 
     @property
     def weighted_score(self) -> float | None:
-        """Weight-normalised overall score on the rubric's 0-``scale_max`` scale.
+        """Weight-normalized overall score on the rubric's 0-``scale_max`` scale.
 
         Axes with no assessed criteria are dropped from both numerator and the
         weight total, so an unassessed axis neither helps nor hurts the score.

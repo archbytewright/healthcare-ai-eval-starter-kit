@@ -52,13 +52,13 @@ def test_generate_wraps_transport_error(monkeypatch: pytest.MonkeyPatch) -> None
         OllamaModel("llama3.1:8b").generate("sys", "user")
 
 
-def test_host_scheme_is_normalised() -> None:
+def test_host_scheme_is_normalized() -> None:
     """A scheme-less host gets an http:// prefix; a trailing slash is trimmed."""
     assert OllamaModel("m", host="127.0.0.1:11434")._host == "http://127.0.0.1:11434"
     assert OllamaModel("m", host="http://h:1/")._host == "http://h:1"
 
 
-def test_cli_rejects_unrecognised_model(tmp_path: Path) -> None:
+def test_cli_rejects_unrecognized_model(tmp_path: Path) -> None:
     """--model without the 'ollama:' prefix errors instead of silently running the mock."""
     out = tmp_path / "r.md"
     assert main(["run", "--model", "gpt-4", "--out", str(out)]) == 2

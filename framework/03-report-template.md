@@ -56,5 +56,5 @@ vignettes are a screen and not a substitute for local validation.
 - Not a statement that the tool is safe for the org's population. That is local
   validation, a later, scoped, data-governed step.
 - Not a substitute for the document-review axes. The harness fills the
-  behaviour-assessed rows; a human completes the oversight, failure-mode, and
+  behavior-assessed rows; a human completes the oversight, failure-mode, and
   regulatory rows from vendor documentation.

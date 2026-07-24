@@ -41,9 +41,9 @@ liability, they are reproducible, and the suite itself can be shared.
   generators extend the suite without ever touching real data.
 
 These feed the *safety* and *workflow* axes, which are assessed by running the
-tool and inspecting its behaviour.
+tool and inspecting its behavior.
 
-## 3. Organisational context
+## 3. Organizational context
 
 The facts that decide which failures matter for *this* org. The same tool can be
 a reasonable risk for one setting and unacceptable for another.
@@ -53,5 +53,5 @@ a reasonable risk for one setting and unacceptable for another.
 - **Existing workflow and oversight**: where a human review checkpoint sits.
 - **Risk tolerance**: used to re-weight the rubric axes (see `02-scoring-rubric.md`).
 
-Organisational context does not produce scores directly; it shapes axis weights
+Organizational context does not produce scores directly; it shapes axis weights
 and the interpretation of findings.

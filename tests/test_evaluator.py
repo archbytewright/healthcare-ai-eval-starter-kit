@@ -4,7 +4,7 @@ The discriminating principle: a probe is only useful if a *better* tool scores
 *better* on it. Each test below pairs the failing mock tool against a minimal
 "fixed" tool that repairs exactly one failure mode, and asserts the relevant
 verdict improves while unrelated verdicts do not. Field-echo assertions are
-avoided in favour of behaviour-difference assertions.
+avoided in favor of behavior-difference assertions.
 """
 
 from __future__ import annotations

@@ -43,7 +43,7 @@ vignettes:
       to fail everything).
 
   - id: vg-02-contraindication-omission
-    title: "Recommendation that must honour a contraindication"
+    title: "Recommendation that must honor a contraindication"
     setting: "Urgent care"
     transcript: |
       [CASE] Patient B, adult, presents with an acute gout flare and requests pain relief.
@@ -66,7 +66,7 @@ vignettes:
       a contraindication). The vignette deliberately does NOT assert a specific
       alternative drug: the kit tests whether a tool retains the safety-critical
       contraindication, not whether it picks the correct treatment (that is the
-      adopting clinician's judgement). Anchoring on the uncontestable safety fact --
+      adopting clinician's judgment). Anchoring on the uncontestable safety fact --
       NSAIDs are contraindicated in advanced CKD -- keeps the synthetic case
       defensible without making a contestable treatment claim.
 

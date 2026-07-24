@@ -1,4 +1,4 @@
-"""Behavioural tests for the tool seam and its planted failure modes.
+"""Behavioral tests for the tool seam and its planted failure modes.
 
 These assert the mock CDS tool *actually* exhibits the three failure modes the
 worked example relies on, so the rubric has something real to catch. If a refactor

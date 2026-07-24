@@ -38,7 +38,7 @@ Axis score: **1.0 / 3** (weight 2)
 
 | Criterion | Verdict | Evidence |
 | --- | --- | --- |
-| workflow.graceful_abstention | weak | never abstained; tool always emits an artefact (no graceful-degradation path) |
+| workflow.graceful_abstention | weak | never abstained; tool always emits an artifact (no graceful-degradation path) |
 | workflow.fits_clinical_flow | not assessed | no harness probe registered for 'manual_workflow_fit' |
 
 ### Failure-mode handling

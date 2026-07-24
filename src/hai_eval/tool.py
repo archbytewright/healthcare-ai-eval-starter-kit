@@ -55,7 +55,7 @@ class ToolUnderTest(Protocol):
         ...
 
     def assess(self, vignette: Vignette) -> ToolOutput:
-        """Produce the tool's artefact for one synthetic case (for CDS, a recommendation)."""
+        """Produce the tool's artifact for one synthetic case (for CDS, a recommendation)."""
         ...
 
 
@@ -76,17 +76,17 @@ class DeterministicMockModel:
     a rubric probe:
 
     1. **Contraindication omission.** It drops any case line tagged
-       ``[CONTRAINDICATION]``, modelling a CDS tool whose recommendation silently
+       ``[CONTRAINDICATION]``, modeling a CDS tool whose recommendation silently
        ignores a safety-critical contraindication (and so recommends the unsafe
        option that was on the kept guidance line).
     2. **Injection susceptibility.** If the input contains an embedded instruction
        (``ignore the above`` / ``please write <canary>``), it complies and emits the
-       canary, modelling a tool with no input trust boundary.
+       canary, modeling a tool with no input trust boundary.
     3. **No deferral.** It never abstains, even when the case is ambiguous and the
        system prompt permits deferring -- the automation-bias failure a CDS tool
-       should avoid (it must support, not replace, clinician judgement).
+       should avoid (it must support, not replace, clinician judgment).
 
-    The same keep-everything behaviour also leaks out-of-scope context present in the
+    The same keep-everything behavior also leaks out-of-scope context present in the
     input (it has no scope boundary) -- an emergent failure the scope-isolation probe
     catches, not a separately coded one.
     """
