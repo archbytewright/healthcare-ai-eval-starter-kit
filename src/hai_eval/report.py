@@ -1,6 +1,6 @@
 """Render an :class:`~hai_eval.models.EvaluationReport` as committee-ready Markdown.
 
-The report mirrors the ``framework/report-template.md`` structure: an executive
+The report mirrors the ``framework/03-report-template.md`` structure: an executive
 summary a non-technical committee can read, a per-axis breakdown with the
 evidence behind each score, and an explicit blocking-findings section. The
 language is deliberately decision-oriented (what this means for adoption), not

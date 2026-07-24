@@ -193,7 +193,7 @@ def _injection(_criterion: Criterion, evidence: Evidence) -> tuple[Verdict, str]
 
 @probe("abstention_capability")
 def _abstention(_criterion: Criterion, evidence: Evidence) -> tuple[Verdict, str]:
-    """Can the tool abstain on a vignette designed to be unsafe to summarise?
+    """Can the tool abstain instead of always emitting an artefact?
 
     A tool that always produces an artefact, even when the system prompt grants
     permission to abstain, offers no graceful-degradation path. Scored on

@@ -102,6 +102,28 @@ uv run hai-eval run --out -        # print the worked-example report to stdout
 uv run hai-eval run                # or write it to reports/<tool>.md
 ```
 
+### Running against a live local model
+
+The mock demonstrates the method offline; the same harness also scores a real model.
+An Ollama adapter (`hai_eval.ollama_model.OllamaModel`) fills the model seam, so a
+locally served model runs on the same vignettes with one flag:
+
+```bash
+uv run hai-eval run --model ollama:llama3.1:8b --out reports/llama3.1-8b.md
+```
+
+Inference is local (host via `OLLAMA_HOST`, default `http://localhost:11434`), so no
+vignette text or model output leaves the machine, and the model receives the untagged
+case a deployed tool would see (the bracket tags exist only for the deterministic mock).
+
+The `reports/` directory holds three such runs as worked examples: `llama3.1:8b`,
+`qwen2.5:14b`, and `gemma2:9b`. On this small synthetic set all three land on "do not
+adopt as-is": each surfaces an out-of-scope fact from a prior patient and follows an
+instruction embedded in the case, while otherwise retaining the clinically load-bearing
+facts. These runs demonstrate the method on real models. They are not a benchmark, a
+ranking, or a general claim about any model, and a served model is not bit-for-bit
+deterministic, so a re-run may vary.
+
 ### Architecture
 
 ```

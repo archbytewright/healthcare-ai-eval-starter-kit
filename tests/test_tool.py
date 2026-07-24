@@ -52,6 +52,23 @@ def test_clean_case_is_retained() -> None:
     assert INJECTION_CANARY not in out.text
 
 
+def test_adapter_strips_tags_for_real_models() -> None:
+    """strip_tags=True hands the model the untagged case: content survives, tags do not."""
+    captured: dict[str, str] = {}
+
+    class _Capture:
+        def generate(self, system: str, user: str) -> str:
+            captured["user"] = user
+            return "ok"
+
+    tool = MockDecisionSupportTool(_Capture(), strip_tags=True)
+    tool.assess(_vignette("vg-02-contraindication-omission"))
+    assert "[CONTRAINDICATION]" not in captured["user"]
+    assert "[CASE]" not in captured["user"]
+    # the clinical facts survive; only the role markers are removed
+    assert "chronic kidney disease" in captured["user"]
+
+
 def test_model_is_deterministic() -> None:
     """Same input, same output -- the example must be byte-reproducible."""
     model = DeterministicMockModel()

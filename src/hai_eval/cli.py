@@ -77,7 +77,9 @@ def _run(args: argparse.Namespace) -> int:
     elif args.model.startswith("ollama:"):
         model_name = args.model.split(":", 1)[1]
         tool = MockDecisionSupportTool(
-            OllamaModel(model_name), name=f"{model_name} (Ollama, local) as CDS tool"
+            OllamaModel(model_name),
+            name=f"{model_name} (Ollama, local) as CDS tool",
+            strip_tags=True,
         )
     else:
         logger.error(
