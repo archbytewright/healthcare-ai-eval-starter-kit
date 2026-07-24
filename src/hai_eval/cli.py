@@ -1,13 +1,14 @@
 """Command-line entry point for the worked-example evaluation.
 
-``hai-eval run`` loads the shipped rubric and synthetic vignette set, runs the
-deterministic mock clinical decision support through the harness, and writes a Markdown
-report. With no real tool wired in, the command is a self-contained
-demonstration of the method end to end.
+``hai-eval run`` loads the shipped rubric and synthetic vignette set, runs a clinical
+decision support tool through the harness, and writes a Markdown report. By default the
+tool is the deterministic mock -- a self-contained demonstration of the method end to
+end; ``--model ollama:<name>`` evaluates a live local model via Ollama instead.
 
 Usage:
-    hai-eval run                       # write report to reports/<tool>.md
-    hai-eval run --out -               # print report to stdout
+    hai-eval run                             # deterministic mock -> reports/<tool>.md
+    hai-eval run --out -                     # print report to stdout
+    hai-eval run --model ollama:llama3.1:8b  # evaluate a live local model
     hai-eval run --rubric path.yaml --vignettes path.yaml
 """
 
@@ -21,6 +22,7 @@ from loguru import logger
 
 from hai_eval.evaluator import run_evaluation
 from hai_eval.loader import LoaderError, load_rubric, load_vignettes
+from hai_eval.ollama_model import OllamaError, OllamaModel
 from hai_eval.report import render_markdown
 from hai_eval.tool import DeterministicMockModel, MockDecisionSupportTool
 
@@ -51,6 +53,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="output path for the Markdown report, or '-' for stdout "
         "(defaults to reports/<tool>.md)",
     )
+    run.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="evaluate a live local model via Ollama, e.g. 'ollama:llama3.1:8b'; "
+        "default (omitted) runs the deterministic mock.",
+    )
     return parser
 
 
@@ -62,8 +71,26 @@ def _run(args: argparse.Namespace) -> int:
         logger.error("load failed: {}", exc)
         return 2
 
-    tool = MockDecisionSupportTool(DeterministicMockModel())
-    report = run_evaluation(tool, rubric, vignettes)
+    tool: MockDecisionSupportTool
+    if args.model is None:
+        tool = MockDecisionSupportTool(DeterministicMockModel())
+    elif args.model.startswith("ollama:"):
+        model_name = args.model.split(":", 1)[1]
+        tool = MockDecisionSupportTool(
+            OllamaModel(model_name), name=f"{model_name} (Ollama, local) as CDS tool"
+        )
+    else:
+        logger.error(
+            "unrecognized --model {!r}; expected 'ollama:<name>' (e.g. 'ollama:llama3.1:8b')",
+            args.model,
+        )
+        return 2
+
+    try:
+        report = run_evaluation(tool, rubric, vignettes)
+    except OllamaError as exc:
+        logger.error("live-model evaluation failed: {}", exc)
+        return 2
     markdown = render_markdown(report)
 
     if args.out == "-":

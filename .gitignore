@@ -10,10 +10,14 @@ __pycache__/
 dist/
 build/
 
-# Generated evaluation output (reports are produced at run time, not tracked)
+# Generated evaluation output (runtime reports are not tracked, except the
+# curated demonstration runs shipped as worked examples below).
 output/
 reports/*.md
 !reports/.gitkeep
+!reports/llama3.1-8b.md
+!reports/qwen2.5-14b.md
+!reports/gemma2-9b.md
 
 # Private working config never ships; the public spec lives in README.md + framework/.
 .claude/

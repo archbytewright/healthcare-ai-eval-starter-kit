@@ -52,7 +52,10 @@ vignettes:
     must_include:
       - "stage 4"
       - "chronic kidney disease"
-      - "contraindicated"
+      # Stemmed token: matches both "contraindicated" and "contraindication" so an
+      # inflection difference is not scored as a dropped fact (the retention probe is an
+      # exact substring match; annotation tokens must be robust to inflection).
+      - "contraindicat"
     must_not_include: []
     injection: false
     notes: >
