@@ -50,6 +50,13 @@ MUTATIONS: tuple[Mutation, ...] = (
         path="src/hai_eval/core/engine.py",
         find="and score.tier is ProbeTier.DETERMINISTIC",
         replace="and score.tier is not None",
+        equivalent=True,
+        note=(
+            "Equivalent while the cap holds: nothing below DETERMINISTIC can carry a FAIL by the "
+            "time the gate reads it, so no test can tell the two apart. Kept as defence in depth "
+            "against a future edit that moves the cap, and declared equivalent rather than left "
+            "looking like a guarded invariant -- the cap itself is guarded by screen-cap-removed."
+        ),
     ),
     Mutation(
         name="axis-eligibility-ignored",
@@ -107,8 +114,8 @@ MUTATIONS: tuple[Mutation, ...] = (
         name="pairing-guard-removed",
         invariant="responses must correspond one-to-one with scenarios",
         path="src/hai_eval/core/engine.py",
-        find="    if want != got:",
-        replace="    if False:",
+        find="    if want != got or any(",
+        replace="    if False and any(",
     ),
     Mutation(
         name="profile-mismatch-allowed",
@@ -152,6 +159,86 @@ MUTATIONS: tuple[Mutation, ...] = (
         find='    return sorted({word for word in FORBIDDEN if re.search(rf"\\b{word}", lowered)})',
         replace="    return []",
         note="mutating a test to prove the test is not vacuous",
+    ),
+    Mutation(
+        name="run-wide-level-gate",
+        invariant="evidence level is resolved per criterion, not from the run's weakest response",
+        path="src/hai_eval/core/engine.py",
+        find="    usable = tuple(p for p in relevant if spec.tier_at(p.level) is not None)",
+        replace=(
+            "    _worst = min((p.level for p in evidence.pairs), default=Level.PROSE)\n"
+            "    usable = tuple(p for p in relevant if spec.tier_at(_worst) is not None)"
+        ),
+    ),
+    Mutation(
+        name="unknown-probe-silently-dropped",
+        invariant="a check the profile does not supply is a load error, not a quiet exclusion",
+        path="src/hai_eval/core/engine.py",
+        find="    if unknown:",
+        replace="    if False:",
+    ),
+    Mutation(
+        name="disagreement-skips-the-cap",
+        invariant="every verdict passes through one capping path, whatever its outcome type",
+        path="src/hai_eval/core/engine.py",
+        find="    if tier is not ProbeTier.DETERMINISTIC and verdict < Verdict.STRONG:",
+        replace="    if tier is ProbeTier.SCREEN and verdict < Verdict.STRONG:",
+    ),
+    Mutation(
+        name="unjudged-scenarios-vanish",
+        invariant="a scenario nothing could judge scores zero rather than disappearing",
+        path="src/hai_eval/core/engine.py",
+        find="    unjudged = {p.scenario.id for p in short} | unobserved",
+        replace="    unjudged = set()",
+    ),
+    Mutation(
+        name="adapter-fault-blamed-on-tool",
+        invariant="a broken integration is attributed to the adapter, not the subject",
+        path="src/hai_eval/core/engine.py",
+        find="Cause.ADAPTER if short and all(p.scenario.id in faulted for p in short)",
+        replace="Cause.ADAPTER if False",
+    ),
+    Mutation(
+        name="provenance-not-namespaced",
+        invariant="adapter-supplied provenance cannot impersonate an engine finding",
+        path="src/hai_eval/core/engine.py",
+        find='        f"adapter-declared: {key}": str(value)',
+        replace='        f"{key}": str(value)',
+    ),
+    Mutation(
+        name="unverifiable-level-accepted",
+        invariant="a profile cannot declare a level the engine has no verifier for",
+        path="src/hai_eval/core/profile.py",
+        find="    if unverifiable:",
+        replace="    if False:",
+    ),
+    Mutation(
+        name="relevance-ignored",
+        invariant="a scenario set that asks nothing is the rubric's gap, not the tool's failure",
+        path="src/hai_eval/core/engine.py",
+        find="    relevant = tuple(p for p in evidence.pairs if spec.relevant(p.scenario))",
+        replace="    relevant = tuple(evidence.pairs)",
+    ),
+    Mutation(
+        name="best-sample-wins",
+        invariant="a scenario is scored at its weakest sample",
+        path="src/hai_eval/core/evidence.py",
+        find="        return min(s.level for s in self.samples)",
+        replace="        return max(s.level for s in self.samples)",
+    ),
+    Mutation(
+        name="samples-drawn-once",
+        invariant="every scenario is drawn the requested number of times",
+        path="src/hai_eval/core/engine.py",
+        find="        for _ in range(samples):",
+        replace="        for _ in range(1):",
+    ),
+    Mutation(
+        name="empty-claims-allowed",
+        invariant="a probe must declare at least one level it can speak at",
+        path="src/hai_eval/core/profile.py",
+        find="        if not self.claims:",
+        replace="        if False:",
     ),
 )
 

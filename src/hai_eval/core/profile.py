@@ -43,6 +43,19 @@ class ProbeSpec:
 
     fn: Probe
     claims: Mapping[Level, ProbeTier]
+    relevant: Callable[[Any], bool] = lambda _scenario: True
+    """Which scenarios this check applies to at all.
+
+    Needed to tell two absences apart, which the first draft conflated and mis-blamed. If NO
+    scenario is relevant, the scenario set never asked the question and that is the RUBRIC's gap. If
+    relevant scenarios exist but the tool exposed too little on them, that is the TOOL's. Scoring a
+    structurally perfect tool zero because the author annotated nothing was the bug.
+    """
+
+    def __post_init__(self) -> None:
+        if not self.claims:
+            msg = "a probe must declare at least one level it can make a claim at"
+            raise ValueError(msg)
 
     @property
     def minimum_level(self) -> Level:
@@ -83,6 +96,16 @@ class Profile:
 _REGISTRY: dict[str, Profile] = {}
 
 
+VERIFIABLE_LEVELS = frozenset({Level.PROSE, Level.STRUCTURED})
+"""Levels the engine can actually verify a claim about today.
+
+``GROUNDED`` is specified and unimplemented, and an unimplemented level was being rubber-stamped:
+an adapter could declare it, ship an ordinary structured payload with no spans, and be believed --
+in the package whose whole thesis is that a claimed level is verified rather than trusted. Declaring
+a level with no verifier is a registration error, and this set is what to extend when spans land.
+"""
+
+
 def register_profile(profile: Profile) -> Profile:
     """Register under ``name@version``. Re-registration is an error, not a silent swap."""
     if profile.ref in _REGISTRY:
@@ -90,6 +113,13 @@ def register_profile(profile: Profile) -> Profile:
         raise ValueError(msg)
     if profile.artifact_model is None and Level.STRUCTURED in profile.levels:
         msg = f"profile {profile.ref!r} claims STRUCTURED but supplies no artifact_model"
+        raise ValueError(msg)
+    unverifiable = sorted(lvl.label for lvl in profile.levels - VERIFIABLE_LEVELS)
+    if unverifiable:
+        msg = (
+            f"profile {profile.ref!r} declares level(s) {unverifiable} that the engine cannot "
+            f"verify; a level nobody can check is a claim taken on trust"
+        )
         raise ValueError(msg)
     _REGISTRY[profile.ref] = profile
     return profile

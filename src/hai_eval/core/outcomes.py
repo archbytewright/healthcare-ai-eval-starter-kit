@@ -51,8 +51,8 @@ class Cause(StrEnum):
 class Assessed:
     """The probe reached a verdict.
 
-    ``tier`` may be lowered by the probe for this finding only (never raised -- see
-    ``engine.effective_tier``). ``level_used`` records the evidence depth the verdict actually
+    ``tier`` may be lowered by the probe for this finding only, never raised (see
+    :func:`hai_eval.core.profile.weakest`). ``level_used`` records the depth the verdict actually
     rests on, so a reader can tell a structural fact from a screen over prose.
     """
 
@@ -61,6 +61,15 @@ class Assessed:
     excerpt: str = ""
     tier: ProbeTier | None = None
     level_used: Level | None = None
+    unobserved: tuple[str, ...] = ()
+    """Scenario ids where this check had nothing to look at, and so judged nothing.
+
+    Distinct from "looked and found it clean", and the distinction is load bearing: a subject
+    controls how much it emits, so a check that awards a pass over an absence lets it buy one by
+    going quiet. A tool declining a scenario made a text-based check flip from failing to STRONG,
+    because the text it had been failing on was gone. The engine treats these exactly like evidence
+    that fell short of the level needed -- as zeros, not as absent.
+    """
 
 
 @dataclass(frozen=True)
@@ -84,6 +93,13 @@ class Disagreement:
     detail: str
     sources: tuple[str, ...]
     excerpt: str = ""
+    tier: ProbeTier | None = None
+    """As on :class:`Assessed`, may lower the criterion's trust for this finding and never raise it.
+
+    Without it a probe had no way to say "these two sources disagree, but my means of noticing that
+    is itself fallible" -- and a contradiction found by a shaky method was scored exactly like one
+    found by an exact comparison.
+    """
 
 
 Outcome = Assessed | Unmeasurable | Disagreement

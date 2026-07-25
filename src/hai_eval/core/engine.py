@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from hai_eval.core.evidence import Evidence, Pair
+from hai_eval.core.evidence import Evidence, Pair, Sample
 from hai_eval.core.levels import Level
 from hai_eval.core.models import CriterionScore, Rubric, ToolResponse
 from hai_eval.core.outcomes import Cause, Disagreement, Unmeasurable
@@ -24,12 +24,23 @@ if TYPE_CHECKING:
     from hai_eval.core.models import Criterion, ScenarioSet
 
 
+MANUAL_PREFIX = "manual_"
+"""Reserved prefix declaring that a criterion is reviewed by a human.
+
+Makes "no automated check" something an author writes on purpose, so it can be told apart from a
+mistyped probe name -- which used to look identical and silently deleted the criterion.
+"""
+
+
 class EvaluationError(RuntimeError):
     """The harness cannot score this run, and will not guess."""
 
 
 class ToolUnderTest[S](Protocol):
     """One method, plus a name. Everything a tool reports about itself is derived, not asserted.
+
+    ``respond`` is called once per requested sample, so it must be safe to call repeatedly with the
+    same scenario. A deterministic tool simply returns the same thing each time.
 
     Generic over the scenario type because an adapter is written against ONE profile: a tool that
     understands a scenario carrying one domain's annotations is not a tool that understands another
@@ -74,6 +85,7 @@ class Coverage:
     weight_scored: float
     weight_total: float
     scenarios_total: int
+    samples_per_scenario: int
     levels_reached: tuple[tuple[str, str], ...]
     """(scenario id, level label) for every response, so a reader can see where a tool degraded."""
 
@@ -149,15 +161,44 @@ def run_evaluation(
     rubric: Rubric,
     scenario_set: ScenarioSet,
     profile: Profile,
+    *,
+    samples: int = 1,
 ) -> EvaluationReport:
     """Run ``tool`` over the scenarios and score it against ``rubric``.
 
+    ``samples`` draws each scenario that many times. One draw cannot distinguish a tool that is
+    right from one that is right this time, so the count is explicit rather than assumed, and every
+    sample is verified independently.
+
     Raises:
-        EvaluationError: if the rubric targets another profile, or the responses do not correspond
-            one-to-one with the scenarios.
+        EvaluationError: if the rubric targets another profile, names a check the profile does not
+            supply, or the responses do not correspond one-to-one with the scenarios.
     """
+    if samples < 1:
+        msg = f"samples must be at least 1, got {samples}"
+        raise EvaluationError(msg)
     if rubric.profile != profile.ref:
         msg = f"rubric targets profile {rubric.profile!r} but {profile.ref!r} was supplied"
+        raise EvaluationError(msg)
+
+    # A criterion naming a check the profile does not have used to be reported as the rubric's gap,
+    # which excluded it from the score AND took its axis weight out of the divisor -- so a
+    # one-character typo in a probe name raised a failing tool to a perfect score and deleted its
+    # blocking finding. Exactly the defect that was fixed for axis names and left open for probe
+    # names. A criterion meant for human review declares it with the reserved prefix.
+    unknown = sorted(
+        {
+            c.probe
+            for c in rubric.criteria
+            if not c.probe.startswith(MANUAL_PREFIX) and c.probe not in profile.probes
+        }
+    )
+    if unknown:
+        msg = (
+            f"rubric names check(s) {unknown} that profile {profile.ref!r} does not supply "
+            f"(available: {sorted(profile.probes)}); use the {MANUAL_PREFIX!r} prefix for a "
+            f"criterion reviewed by a human"
+        )
         raise EvaluationError(msg)
 
     logger.info(
@@ -168,44 +209,54 @@ def run_evaluation(
         profile.ref,
         len(scenario_set.scenarios),
     )
-    responses = tuple(tool.respond(s) for s in scenario_set.scenarios)
+    draws: dict[str, list[ToolResponse]] = {}
+    for scenario in scenario_set.scenarios:
+        for _ in range(samples):
+            response = tool.respond(scenario)
+            draws.setdefault(response.scenario_id, []).append(response)
+    responses = tuple(r for batch in draws.values() for r in batch)
 
     # An adapter returning the wrong scenario id used to shrink the run silently: the join dropped
     # unmatched cases, every emptied probe blamed the DATA for the adapter's bug, and
     # the thinned run scored full marks. Refuse instead.
     want = sorted(s.id for s in scenario_set.scenarios)
-    got = sorted(r.scenario_id for r in responses)
-    if want != got:
+    got = sorted(draws)
+    if want != got or any(len(batch) != samples for batch in draws.values()):
         missing = sorted(set(want) - set(got))
         unexpected = sorted(set(got) - set(want))
         msg = (
             f"responses do not correspond to the scenario set: "
-            f"{len(responses)} response(s) for {len(want)} scenario(s)"
+            f"{len(responses)} response(s) for {len(want)} scenario(s) x {samples} sample(s)"
         )
         if missing:
             msg += f"; nothing for {missing}"
         if unexpected:
             msg += f"; unknown scenario_id {unexpected}"
-        if len(set(got)) != len(got):
-            msg += "; duplicate scenario_id in responses"
+        short = sorted(sid for sid, batch in draws.items() if len(batch) != samples)
+        if short:
+            msg += f"; wrong sample count for {short}"
         raise EvaluationError(msg)
 
-    by_id = {r.scenario_id: r for r in responses}
     pairs: list[Pair[Any]] = []
+    faulted_scenarios: set[str] = set()
     integration_faults: list[str] = []
     for scenario in scenario_set.scenarios:
-        response = by_id[scenario.id]
-        level, artifact, fault = _verify_level(response, profile)
-        if fault:
-            integration_faults.append(f"{scenario.id}: {fault}")
-        pairs.append(
-            Pair(
-                scenario=scenario,
-                response=response.model_copy(update={"level": level}),
-                artifact=artifact,
+        collected: list[Sample[Any]] = []
+        for index, response in enumerate(draws[scenario.id]):
+            level, artifact, fault = _verify_level(response, profile)
+            if fault:
+                faulted_scenarios.add(scenario.id)
+                label = f"{scenario.id}" if samples == 1 else f"{scenario.id} sample {index + 1}"
+                integration_faults.append(f"{label}: {fault}")
+            collected.append(
+                Sample(
+                    response=response.model_copy(update={"level": level}),
+                    artifact=artifact,
+                    level=level,
+                )
             )
-        )
-    evidence = Evidence(pairs=tuple(pairs))
+        pairs.append(Pair(scenario=scenario, samples=tuple(collected)))
+    evidence = Evidence(pairs=tuple(pairs), samples_requested=samples)
 
     axis_scores: list[AxisScore] = []
     blocking: list[str] = []
@@ -217,7 +268,13 @@ def run_evaluation(
         criterion_scores: list[CriterionScore] = []
         for criterion in rubric.criteria_for(axis.key):
             total_criteria += 1
-            score = _score_one(criterion, axis_key=axis.key, evidence=evidence, profile=profile)
+            score = _score_one(
+                criterion,
+                axis_key=axis.key,
+                evidence=evidence,
+                profile=profile,
+                faulted=faulted_scenarios,
+            )
             if score.verdict is not None:
                 scored_criteria += 1
             criterion_scores.append(score)
@@ -249,11 +306,20 @@ def run_evaluation(
         weight_scored=scored_weight,
         weight_total=sum(a.weight for a in rubric.axes),
         scenarios_total=len(scenario_set.scenarios),
+        samples_per_scenario=samples,
         levels_reached=tuple((p.scenario.id, p.level.label) for p in pairs),
     )
-    provenance = dict(getattr(tool, "provenance", {}) or {})
-    if integration_faults:
-        provenance["integration faults"] = "; ".join(integration_faults)
+    # Adapter-supplied provenance is NAMESPACED. It arrives from the party under evaluation, and
+    # unprefixed it could set a key like "integration faults" that reads as an engine finding --
+    # which one did, in a red-team run that shipped "integration faults: none, independently
+    # verified" into a report the engine had never checked.
+    provenance = {
+        f"adapter-declared: {key}": str(value)
+        for key, value in dict(getattr(tool, "provenance", {}) or {}).items()
+    }
+    provenance["integration faults"] = (
+        "; ".join(integration_faults) if integration_faults else "none detected"
+    )
 
     return EvaluationReport(
         tool_name=tool.name,
@@ -270,37 +336,66 @@ def run_evaluation(
 
 
 def _score_one(
-    criterion: Criterion, *, axis_key: str, evidence: Evidence[Any], profile: Profile
+    criterion: Criterion,
+    *,
+    axis_key: str,
+    evidence: Evidence[Any],
+    profile: Profile,
+    faulted: set[str],
 ) -> CriterionScore:
     """Resolve one criterion to a score, including the ways it can fail to resolve."""
-    spec = profile.probes.get(criterion.probe)
-    if spec is None:
+    if criterion.probe.startswith(MANUAL_PREFIX):
         return CriterionScore(
             criterion_key=criterion.key,
             axis=axis_key,
             verdict=None,
-            evidence=f"no probe {criterion.probe!r} in profile {profile.ref}",
+            evidence=f"declared for human review ({criterion.probe})",
             tier=ProbeTier.MANUAL,
             unmeasurable_cause=Cause.RUBRIC.value,
         )
+    spec = profile.probes[criterion.probe]  # validated at entry to run_evaluation
 
-    available = min((p.level for p in evidence.pairs), default=Level.PROSE)
-    tier_for_level = spec.tier_at(available)
-    if tier_for_level is None:
-        short = evidence.scenarios_below(spec.minimum_level)
+    # Relevance and reachability are resolved PER CRITERION. Resolving them once for the whole run,
+    # from its weakest response, meant one degraded scenario demoted every criterion in the rubric:
+    # a tool that provably violated scope on four scenarios lost its blocking finding by falling
+    # back to prose on a fifth, unrelated one.
+    relevant = tuple(p for p in evidence.pairs if spec.relevant(p.scenario))
+    if not relevant:
+        return CriterionScore(
+            criterion_key=criterion.key,
+            axis=axis_key,
+            verdict=None,
+            evidence="no scenario in this set exercises this criterion",
+            tier=criterion.tier,
+            unmeasurable_cause=Cause.RUBRIC.value,
+        )
+
+    usable = tuple(p for p in relevant if spec.tier_at(p.level) is not None)
+    short = tuple(p for p in relevant if spec.tier_at(p.level) is None)
+    if not usable:
+        cause = (
+            Cause.ADAPTER if short and all(p.scenario.id in faulted for p in short) else Cause.TOOL
+        )
+        blame = (
+            "the integration failed to produce what it declared"
+            if cause is Cause.ADAPTER
+            else f"the tool exposed only '{min(p.level for p in relevant).label}'"
+        )
         return CriterionScore(
             criterion_key=criterion.key,
             axis=axis_key,
             verdict=None,
             evidence=(
-                f"needs '{spec.minimum_level.label}' evidence; the tool reached "
-                f"'{available.label}'" + (f" (short on {', '.join(short)})" if short else "")
+                f"needs '{spec.minimum_level.label}' evidence on "
+                f"{', '.join(p.scenario.id for p in short)}; {blame}"
             ),
             tier=criterion.tier,
-            unmeasurable_cause=Cause.TOOL.value,
+            unmeasurable_cause=cause.value,
             counts_against_tool=True,
         )
 
+    # Trust comes from the weakest level among the scenarios actually used, not from the run.
+    tier_for_level = weakest(*(spec.tier_at(p.level) for p in usable))
     outcome = spec.fn(criterion, evidence)
 
     if isinstance(outcome, Unmeasurable):
@@ -315,30 +410,59 @@ def _score_one(
         )
 
     if isinstance(outcome, Disagreement):
-        # A contradiction between sources is a finding in its own right, scored as a hard fail so it
-        # cannot be a warning glyph nobody acts on. Its tier is whatever the check supports.
-        return CriterionScore(
-            criterion_key=criterion.key,
-            axis=axis_key,
-            verdict=Verdict.FAIL,
-            evidence=f"sources disagree ({', '.join(outcome.sources)}): {outcome.detail}",
-            tier=weakest(criterion.tier, tier_for_level),
-            excerpt=outcome.excerpt,
-            level_used=available,
+        # A contradiction between sources is a hard fail so it cannot be a warning nobody acts on --
+        # but it goes through the SAME capping path as any other verdict. Returning it used to be a
+        # way around the cap entirely: a criterion the rubric called fallible produced an uncapped
+        # zero with no caveat, purely by choosing a different outcome type.
+        verdict = Verdict.FAIL
+        text = f"sources disagree ({', '.join(outcome.sources)}): {outcome.detail}"
+        excerpt, probe_tier, level_used = outcome.excerpt, outcome.tier, None
+        unobserved = frozenset[str]()
+    else:
+        verdict, text = outcome.verdict, outcome.evidence
+        excerpt, probe_tier, level_used = outcome.excerpt, outcome.tier, outcome.level_used
+        unobserved = frozenset(outcome.unobserved)
+
+    tier = weakest(criterion.tier, tier_for_level, probe_tier)
+
+    # Scenarios the check could not judge score as zeros rather than vanishing -- whether the
+    # evidence fell short of the level needed, or the subject simply emitted nothing to look at.
+    # Withholding is thus exactly as costly as failing, which is the strictest honest treatment: a
+    # tool that would have failed gains nothing, and one that would have passed loses by not
+    # showing it.
+    unjudged = {p.scenario.id for p in short} | unobserved
+    if unjudged:
+        judged = len(relevant) - len(unjudged)
+        if judged == 0:
+            # Nothing was judged at all, so there is no verdict to scale -- saying "fail" would
+            # assert something about behaviour nobody observed.
+            return CriterionScore(
+                criterion_key=criterion.key,
+                axis=axis_key,
+                verdict=None,
+                evidence=f"{text} [nothing judgeable in any of {len(relevant)} scenario(s)]",
+                tier=tier,
+                excerpt=excerpt,
+                unmeasurable_cause=Cause.TOOL.value,
+                counts_against_tool=True,
+            )
+        scaled = round(float(verdict) * judged / len(relevant))
+        text = (
+            f"{text} [judged {judged}/{len(relevant)} scenario(s); "
+            f"{', '.join(sorted(unjudged))} produced nothing to judge and count as zero]"
         )
+        verdict = Verdict(max(0, min(int(Verdict.STRONG), scaled)))
 
-    tier = weakest(criterion.tier, tier_for_level, outcome.tier)
-    verdict = outcome.verdict
-    text = outcome.evidence
-
-    # A screen cannot produce a hard fail: it sees that something appeared in free text, not what
-    # the tool did with it, so the worst it may say alone is "weak -- look at this". Capped in ONE
-    # place so no probe author can opt out. Every screen that raises a concern carries its caveat,
-    # not only the capped ones: a screen sitting at weak on its own is exactly as fallible.
-    if tier is ProbeTier.SCREEN and verdict < Verdict.STRONG:
+    # Only a DETERMINISTIC check may assert a hard fail. Anything less exact -- a screen, or a
+    # criterion declared for human judgement -- caps at weak and says what it cannot see. Written as
+    # "not deterministic" rather than "is a screen" because an earlier version capped screens and
+    # let MANUAL through, so retiering a fallible check to manual bought an uncapped zero with no
+    # caveat. Applied AFTER the shortfall scaling, so the invariant cannot be undone by arithmetic
+    # that runs later: scaling a capped screen down to zero would have re-created the hard fail.
+    if tier is not ProbeTier.DETERMINISTIC and verdict < Verdict.STRONG:
         verdict = Verdict.WEAK if verdict == Verdict.FAIL else verdict
         caveat = criterion.screen_caveat or "limitation undeclared; treat as unconfirmed"
-        text = f"{text} [SCREEN - needs human confirmation: {caveat}]"
+        text = f"{text} [{tier.value.upper()} - needs human confirmation: {caveat}]"
 
     return CriterionScore(
         criterion_key=criterion.key,
@@ -346,6 +470,7 @@ def _score_one(
         verdict=verdict,
         evidence=text,
         tier=tier,
-        excerpt=outcome.excerpt,
-        level_used=outcome.level_used or available,
+        excerpt=excerpt,
+        level_used=level_used if level_used is not None else min(p.level for p in usable),
+        counts_against_tool=bool(unjudged),
     )

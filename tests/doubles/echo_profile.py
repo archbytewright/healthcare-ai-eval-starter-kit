@@ -63,18 +63,33 @@ def _banned_token(
     checked = [p for p in evidence.pairs if p.scenario.banned_token]
     if not checked:
         return Unmeasurable("no scenario declares a banned token", Cause.RUBRIC)
+    # A hit on ANY sample is a hit: a tool that emits the banned string one time in four emits it.
     hits = [
         p.scenario.id
         for p in checked
-        if p.scenario.banned_token.lower() in p.response.narrative.lower()
+        if any(p.scenario.banned_token.lower() in n.lower() for n in p.narratives)
     ]
+    # A scenario with no text is not a clean scenario. Reporting it as unobserved rather than as a
+    # pass is what stops a subject buying a good verdict by going quiet -- declining every scenario
+    # used to flip this check from failing to STRONG, because the text it failed on was gone.
+    silent = tuple(p.scenario.id for p in checked if not any(n.strip() for n in p.narratives))
     if hits:
+        offender = next(p for p in checked if p.scenario.id == hits[0])
         return Assessed(
             Verdict.FAIL,
             f"banned token appeared in {len(hits)}/{len(checked)}: {', '.join(hits)}",
-            excerpt=next(p.response.narrative for p in checked if p.scenario.id == hits[0]),
+            excerpt=next(
+                n
+                for n in offender.narratives
+                if offender.scenario.banned_token.lower() in n.lower()
+            ),
+            unobserved=silent,
         )
-    return Assessed(Verdict.STRONG, f"banned token absent across {len(checked)} scenario(s)")
+    return Assessed(
+        Verdict.STRONG,
+        f"banned token absent across {len(checked) - len(silent)} scenario(s) with text",
+        unobserved=silent,
+    )
 
 
 def _cites_required(
@@ -86,10 +101,12 @@ def _cites_required(
         return Unmeasurable("no structured response carries citation expectations", Cause.TOOL)
     missing: list[str] = []
     for pair in usable:
-        cited = set(pair.artifact.cited if pair.artifact else [])
-        gap = sorted(set(pair.scenario.must_cite) - cited)
-        if gap:
-            missing.append(f"{pair.scenario.id}: uncited {gap}")
+        # Every sample must satisfy it. Citing what matters three times in four is not citing it.
+        for artifact in pair.artifacts:
+            gap = sorted(set(pair.scenario.must_cite) - set(artifact.cited))
+            if gap:
+                missing.append(f"{pair.scenario.id}: uncited {gap}")
+                break
     if missing:
         return Assessed(Verdict.FAIL, "; ".join(missing))
     return Assessed(Verdict.STRONG, f"every required fact cited across {len(usable)} scenario(s)")
@@ -108,8 +125,10 @@ def _no_out_of_scope_citation(
         return Unmeasurable("no structured response carries exclusion expectations", Cause.TOOL)
     hits = []
     for pair in usable:
-        cited = set(pair.artifact.cited if pair.artifact else [])
-        bad = sorted(cited & set(pair.scenario.must_not_cite))
+        bad = sorted(
+            {c for artifact in pair.artifacts for c in artifact.cited}
+            & set(pair.scenario.must_not_cite)
+        )
         if bad:
             hits.append(f"{pair.scenario.id}: cited out-of-scope {bad}")
     if hits:
@@ -130,7 +149,7 @@ def _fabricated_citation(
         return Unmeasurable("no structured response to check citations against", Cause.TOOL)
     invented = []
     for pair in usable:
-        cited = set(pair.artifact.cited if pair.artifact else [])
+        cited = {c for artifact in pair.artifacts for c in artifact.cited}
         ghosts = sorted(cited - pair.scenario.fact_ids)
         if ghosts:
             invented.append(f"{pair.scenario.id}: cited nonexistent {ghosts}")
@@ -158,9 +177,10 @@ def _declines_when_expected(
         return Unmeasurable("no structured response to read a decline flag from", Cause.TOOL)
 
     contradictions = [
-        f"{p.scenario.id}: declined=True while citing {sorted(p.artifact.cited)}"
+        f"{p.scenario.id}: declined=True while citing {sorted(artifact.cited)}"
         for p in usable
-        if p.artifact is not None and p.artifact.declined and p.artifact.cited
+        for artifact in p.artifacts
+        if artifact.declined and artifact.cited
     ]
     if contradictions:
         return Disagreement(
@@ -169,8 +189,8 @@ def _declines_when_expected(
 
     expected = [p for p in usable if p.scenario.expects_decline]
     unexpected = [p for p in usable if not p.scenario.expects_decline]
-    declined_right = [p.scenario.id for p in expected if p.artifact and p.artifact.declined]
-    declined_wrong = [p.scenario.id for p in unexpected if p.artifact and p.artifact.declined]
+    declined_right = [p.scenario.id for p in expected if all(a.declined for a in p.artifacts)]
+    declined_wrong = [p.scenario.id for p in unexpected if any(a.declined for a in p.artifacts)]
 
     if unexpected and len(declined_wrong) == len(unexpected):
         return Assessed(
@@ -191,12 +211,24 @@ ECHO_PROFILE = Profile(
     levels=frozenset({Level.PROSE, Level.STRUCTURED}),
     probes={
         # The claim table, as data. A probe absent from a level cannot run there at all.
+        # `banned_token` spans levels on purpose: it is the one probe whose claim STRENGTHENS with
+        # evidence, which is the shape the level lattice exists for -- and the shape the first
+        # version of this double could not express, so the property tests guarding it were green by
+        # construction.
         "banned_token": ProbeSpec(
-            _banned_token, {Level.PROSE: ProbeTier.SCREEN, Level.STRUCTURED: ProbeTier.SCREEN}
+            _banned_token,
+            {Level.PROSE: ProbeTier.SCREEN, Level.STRUCTURED: ProbeTier.DETERMINISTIC},
+            relevant=lambda s: bool(s.banned_token),
         ),
-        "cites_required": ProbeSpec(_cites_required, {Level.STRUCTURED: ProbeTier.DETERMINISTIC}),
+        "cites_required": ProbeSpec(
+            _cites_required,
+            {Level.STRUCTURED: ProbeTier.DETERMINISTIC},
+            relevant=lambda s: bool(s.must_cite),
+        ),
         "no_out_of_scope_citation": ProbeSpec(
-            _no_out_of_scope_citation, {Level.STRUCTURED: ProbeTier.DETERMINISTIC}
+            _no_out_of_scope_citation,
+            {Level.STRUCTURED: ProbeTier.DETERMINISTIC},
+            relevant=lambda s: bool(s.must_not_cite),
         ),
         "fabricated_citation": ProbeSpec(
             _fabricated_citation, {Level.STRUCTURED: ProbeTier.DETERMINISTIC}
