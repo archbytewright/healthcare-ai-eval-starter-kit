@@ -32,8 +32,8 @@ Synthetic inputs are a feature, not a compromise: they carry no PHI or BAA
 liability, they are reproducible, and the suite itself can be shared.
 
 - **Constructed clinical vignettes**: realistic encounters written to exercise
-  specific properties (a stated allergy that must survive, a back-to-back pair
-  that must not cross-contaminate).
+  specific properties (a stated allergy that must survive; a case whose input carries a fact
+  about a different patient, which must stay out of this patient's output).
 - **Adversarial / edge cases**: inputs designed to probe a trust boundary
   (instructions embedded in a transcript) or a degradation path (ambiguous or
   incomplete input where abstaining is the safe answer).

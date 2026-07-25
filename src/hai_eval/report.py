@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from hai_eval.models import Verdict
+from hai_eval.models import ProbeTier, Verdict
 
 if TYPE_CHECKING:
     from hai_eval.models import AxisScore, EvaluationReport
@@ -39,12 +39,14 @@ def _axis_section(axis: AxisScore, scale_max: int) -> list[str]:
         "",
         f"Axis score: **{_fmt_score(axis.mean, scale_max)}** (weight {axis.weight:g})",
         "",
-        "| Criterion | Verdict | Evidence |",
-        "| --- | --- | --- |",
+        "| Criterion | Tier | Verdict | Evidence |",
+        "| --- | --- | --- | --- |",
     ]
     for cs in axis.criterion_scores:
         evidence = cs.evidence.replace("|", "\\|")
-        lines.append(f"| {cs.criterion_key} | {_VERDICT_LABEL[cs.verdict]} | {evidence} |")
+        lines.append(
+            f"| {cs.criterion_key} | {cs.tier.value} | {_VERDICT_LABEL[cs.verdict]} | {evidence} |"
+        )
     lines.append("")
     return lines
 
@@ -77,15 +79,52 @@ def render_markdown(report: EvaluationReport) -> str:
     ]
     if report.blocking_findings:
         lines.append(
-            "Each item below is a hard-fail on a safety-relevant criterion. "
-            "A blocking finding should be resolved with the vendor (or the tool "
-            "ruled out) before adoption proceeds."
+            "Each item below is a hard fail on a safety-relevant criterion whose check is "
+            "**deterministic** -- an exact match, not an interpretation. A blocking finding "
+            "should be resolved with the vendor (or the tool ruled out) before adoption "
+            "proceeds."
         )
         lines.append("")
         lines.extend(f"- {finding}" for finding in report.blocking_findings)
     else:
-        lines.append("None. No criterion scored a hard fail on this vignette set.")
+        lines.append(
+            "None. No deterministic safety criterion hard-failed on this vignette set. "
+            "Check the screens below before concluding the tool is clean: a screen can "
+            "surface a real problem it is not able to prove."
+        )
     lines.append("")
+
+    # Screens are reported SEPARATELY from blocking findings, with the model's own words.
+    # Mixing them is what produced a wrong verdict: a summary line ("out-of-scope 'warfarin'
+    # appeared") reads identically whether the tool misused the fact or explicitly dismissed
+    # it, and only the quoted sentence tells them apart.
+    screens = [
+        cs
+        for axis in report.axis_scores
+        for cs in axis.criterion_scores
+        if cs.tier is ProbeTier.SCREEN and cs.verdict in (Verdict.WEAK, Verdict.FAIL)
+    ]
+    lines.append("## Screens -- flagged for human confirmation")
+    lines.append("")
+    if screens:
+        lines.append(
+            "A **screen** is an indicator, not a verdict. Each one is reliable in one "
+            "direction only, and the bracketed note on every line says exactly what that "
+            "screen cannot see. Nothing here blocks adoption on its own. Where there is "
+            "output to quote it is quoted verbatim, so you can settle the question by "
+            "reading it; a screen that fires on an absence has nothing to quote."
+        )
+        lines.append("")
+        for cs in screens:
+            lines.append(f"- **{cs.criterion_key}** -- {cs.evidence}")
+            # Some screens fire on an ABSENCE across the whole set (nothing ever abstained),
+            # which has no output to quote. Say nothing rather than print a placeholder.
+            for chunk in cs.excerpt.splitlines():
+                lines.append(f"  > {chunk}")
+            lines.append("")
+    else:
+        lines.append("No screen raised a concern on this vignette set.")
+        lines.append("")
 
     lines.append("## Per-axis detail")
     lines.append("")
@@ -102,6 +141,16 @@ def render_markdown(report: EvaluationReport) -> str:
         "vignettes are a screen, not a substitute for local validation."
     )
     lines.append("")
+    lines.append(
+        "**Read the Tier column.** A *deterministic* check is exact, so its failure is a "
+        "fact and it alone can block adoption. A *screen* detects a pattern in free text "
+        "and cannot tell you what the tool did with it -- it caps at *weak*, never blocks, "
+        "and is listed under Screens with the model's verbatim output so you can judge it "
+        "yourself. A *manual* criterion needs a human reading documentation. This separation "
+        "exists because a screen that was allowed to block once reported a tool as unsafe for "
+        "correctly identifying and dismissing an out-of-scope fact."
+    )
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -111,6 +160,10 @@ def _recommendation(report: EvaluationReport) -> str:
     The rule is conservative and explicit: any blocking finding forces a
     do-not-adopt-as-is recommendation regardless of the headline score, because
     a single safety hard-fail is not offset by strong scores elsewhere.
+
+    Only DETERMINISTIC safety failures reach ``blocking_findings`` (see
+    :class:`~hai_eval.models.ProbeTier`), so this rule stays conservative without letting a
+    fallible screen end the conversation. A screen's concern is surfaced, not adjudicated.
     """
     if report.blocking_findings:
         return (

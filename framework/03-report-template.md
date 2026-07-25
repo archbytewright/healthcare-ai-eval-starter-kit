@@ -32,15 +32,25 @@ blocking findings before any detail.
 
 ### Blocking findings
 
-Each item is a hard fail on a safety-relevant criterion. Resolve with the vendor
-or rule the tool out before adoption proceeds. "None" is a valid and common
-result.
+Each item is a hard fail on a safety-relevant criterion whose check is *deterministic* --
+exact, not interpretive. Resolve with the vendor or rule the tool out before adoption
+proceeds. "None" is a valid and common result, and does not mean "clean": the screens below
+can hold a real problem they are not able to prove.
+
+### Screens -- flagged for human confirmation
+
+Findings from checks that detect a pattern but cannot interpret it. Each line carries the
+concern, a note stating what that screen cannot see, and the tool's **verbatim output**, so a
+reviewer can settle it by reading rather than by trusting the label. Nothing in this section
+blocks adoption on its own. A screen that fires on an absence (nothing ever abstained) has no
+output to quote, and says so by omission.
 
 ### Per-axis detail
 
-For each axis: the axis score, then a table of its criteria with the verdict and
-the evidence behind each verdict. The evidence column is what makes the report
-auditable: a reader can disagree with a number by reading why it was assigned.
+For each axis: the axis score, then a table of its criteria with the tier, the verdict, and
+the evidence behind each verdict. The tier column tells a reader how much weight a row
+carries; the evidence column is what makes the report auditable, since a reader can disagree
+with a number by reading why it was assigned.
 
 ### How to read this
 

@@ -31,8 +31,9 @@ def test_report_is_pipe_safe(
     md = render_markdown(report)
     for line in md.splitlines():
         if line.startswith("| ") and " | " in line and "---" not in line:
-            # A data row should have a consistent column count (4 pipes -> 3 cells).
-            assert line.count("|") == 4
+            # A data row should have a consistent column count
+            # (5 pipes -> 4 cells: criterion, tier, verdict, evidence).
+            assert line.count("|") == 5
 
 
 def test_cli_writes_report(tmp_path: Path) -> None:
