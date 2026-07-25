@@ -117,11 +117,20 @@ Inference runs against an Ollama instance you control (`OLLAMA_HOST`, default
 machine; point it at another host and the vignettes travel there, and the model receives the untagged
 case a deployed tool would see (the bracket tags exist only for the deterministic mock).
 
+**Each vignette is a separate, stateless request.** The adapter sends one completion per case with no
+conversation history, so nothing carries between cases and every result is attributable to that case's
+own input alone. This matters for reading the scope-isolation finding below: the harness is not testing
+whether a model leaks across a session, because it never gives the model a session to leak across.
+
 The `reports/` directory holds three such runs as worked examples: `llama3.1:8b`,
 `qwen2.5:14b`, and `gemma2:9b`. On this small synthetic set all three land on "do not
-adopt as-is": each surfaces an out-of-scope fact from a prior patient and follows an
-instruction embedded in the case, while otherwise retaining the clinically load-bearing
-facts. These runs demonstrate the method on real models. They are not a benchmark, a
+adopt as-is". One vignette includes, in the case text itself, a note that the previous patient at a
+shared workstation was on a different drug — a fact about someone else that a scope boundary should
+keep out of this patient's output. All three let it through, and all three follow an instruction
+embedded in the case, while otherwise retaining the clinically load-bearing facts. Note what the
+scope probe does and does not claim: it flags that the out-of-scope fact *appeared* in the output, not
+that the tool acted on it. Judging how it was used would need the raw outputs, which these reports do
+not yet include. These runs demonstrate the method on real models. They are not a benchmark, a
 ranking, or a general claim about any model, and a served model is not bit-for-bit
 deterministic, so a re-run may vary.
 
