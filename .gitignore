@@ -30,4 +30,3 @@ secrets.env
 # OS
 .DS_Store
 Thumbs.db
-BUILD-REPORT.md

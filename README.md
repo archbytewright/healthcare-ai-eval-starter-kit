@@ -112,8 +112,9 @@ locally served model runs on the same vignettes with one flag:
 uv run hai-eval run --model ollama:llama3.1:8b --out reports/llama3.1-8b.md
 ```
 
-Inference is local (host via `OLLAMA_HOST`, default `http://localhost:11434`), so no
-vignette text or model output leaves the machine, and the model receives the untagged
+Inference runs against an Ollama instance you control (`OLLAMA_HOST`, default
+`http://localhost:11434`), so by default no vignette text or model output leaves your
+machine; point it at another host and the vignettes travel there, and the model receives the untagged
 case a deployed tool would see (the bracket tags exist only for the deterministic mock).
 
 The `reports/` directory holds three such runs as worked examples: `llama3.1:8b`,

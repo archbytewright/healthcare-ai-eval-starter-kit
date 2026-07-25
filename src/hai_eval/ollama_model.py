@@ -17,6 +17,9 @@ import json
 import os
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit
+
+DEFAULT_PORT = 11434
 
 
 class OllamaError(RuntimeError):
@@ -39,10 +42,23 @@ class OllamaModel:
     ) -> None:
         self.model = model
         resolved = host or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
-        if "://" not in resolved:
+        had_scheme = "://" in resolved
+        if not had_scheme:
             # Ollama's own OLLAMA_HOST convention is scheme-less (e.g. '127.0.0.1:11434').
             resolved = f"http://{resolved}"
-        self._host = resolved.rstrip("/")
+        resolved = resolved.rstrip("/")
+
+        # A scheme-less host with no port would otherwise be tried on port 80
+        # and fail with a bare "connection refused" that explains nothing.
+        # Ollama's own client fills in 11434 here, and only here: given an
+        # explicit scheme it uses that scheme's port, so https://host stays on
+        # 443 and keeps working behind a TLS proxy.
+        parsed = urlsplit(resolved)
+        if not had_scheme and parsed.port is None and parsed.netloc:
+            resolved = urlunsplit(
+                parsed._replace(netloc=f"{parsed.netloc}:{DEFAULT_PORT}")
+            )
+        self._host = resolved
         self._timeout = timeout
 
     def generate(self, system: str, user: str) -> str:

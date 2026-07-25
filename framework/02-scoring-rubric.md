@@ -62,5 +62,5 @@ Roughly half the shipped rubric is assessed by document and governance review,
 not by running the model. This is accurate to the domain: oversight checkpoints,
 monitoring plans, and transparency artifacts are properties of the deployment and
 the vendor, not of the model's text output. A harness that pretended to score
-them mechanically would be measuring theatre. The kit measures what behavior can
+them mechanically would be measuring theater. The kit measures what behavior can
 measure and flags the rest for the reviewer.

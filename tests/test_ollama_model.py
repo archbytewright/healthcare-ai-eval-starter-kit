@@ -58,6 +58,36 @@ def test_host_scheme_is_normalized() -> None:
     assert OllamaModel("m", host="http://h:1/")._host == "http://h:1"
 
 
+def test_scheme_less_host_without_a_port_gets_ollamas_default() -> None:
+    """A bare host means Ollama's port, not port 80.
+
+    Without this the request goes to port 80 and fails with a connection
+    refused that reads as "Ollama is down" rather than "you left the port off".
+    """
+    assert OllamaModel("m", host="10.0.0.5")._host == "http://10.0.0.5:11434"
+    assert OllamaModel("m", host="example.test")._host == "http://example.test:11434"
+    # An explicit port is never overridden.
+    assert OllamaModel("m", host="10.0.0.5:9999")._host == "http://10.0.0.5:9999"
+
+
+def test_an_explicit_scheme_keeps_that_scheme_s_port() -> None:
+    """Only the scheme-less form gets 11434, matching Ollama's own rule.
+
+    Defaulting unconditionally would send https://host to port 11434 and break
+    an Ollama sitting behind a TLS reverse proxy, which is the ordinary way to
+    reach one that is not on localhost.
+    """
+    assert OllamaModel("m", host="https://ollama.example.test")._host == (
+        "https://ollama.example.test"
+    )
+    assert OllamaModel("m", host="http://ollama.example.test")._host == (
+        "http://ollama.example.test"
+    )
+    assert OllamaModel("m", host="https://ollama.example.test:8443")._host == (
+        "https://ollama.example.test:8443"
+    )
+
+
 def test_cli_rejects_unrecognized_model(tmp_path: Path) -> None:
     """--model without the 'ollama:' prefix errors instead of silently running the mock."""
     out = tmp_path / "r.md"
