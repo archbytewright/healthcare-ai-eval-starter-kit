@@ -315,7 +315,7 @@ def test_responses_must_correspond_to_the_scenarios() -> None:
         def respond(self, scenario: EchoScenario) -> ToolResponse:
             return ToolResponse(scenario_id="s1", narrative="x", level=Level.PROSE)
 
-    with pytest.raises(EvaluationError, match="do not correspond"):
+    with pytest.raises(EvaluationError, match="wrong scenario"):
         run_evaluation(Ghost(), _rubric(), _scenarios(), ECHO_PROFILE)
 
 
@@ -567,17 +567,52 @@ def test_a_scenario_is_scored_at_its_weakest_sample() -> None:
     assert {lvl for _, lvl in report.coverage.levels_reached} == {"prose"}
 
 
-def test_unjudged_scenarios_pull_the_verdict_down_proportionally() -> None:
-    """A scenario nothing could judge scores zero; it does not quietly leave the denominator."""
+def test_a_pass_over_partial_evidence_caps_and_cannot_block() -> None:
+    """An exact claim cannot span scenarios nobody saw -- but it must not be INVENTED either.
+
+    The first version scaled the verdict by the judged fraction, which did opposite damage in both
+    directions: ``round(STRONG * 1/6) == 0`` manufactured a blocking hard fail whose own evidence
+    read "no violations found", and concealment came out 1/n as costly as disclosure, free once the
+    set was large enough. Capping does neither.
+    """
     script: Script = {
         "s1": Step(artifact={"cited": ["F1"], "declined": False}),
         "s2": Step(level=Level.PROSE, artifact=None),
         "s3": Step(artifact={"cited": [], "declined": True}),
     }
-    score = _cs(_run(script), "core.invented")
-    assert score.verdict == Verdict.ADEQUATE, score.evidence
-    assert "count as zero" in score.evidence
+    report = _run(script)
+    score = _cs(report, "core.invented")
+    assert score.verdict == Verdict.WEAK, score.evidence
+    assert "no complete claim is possible" in score.evidence
     assert score.counts_against_tool
+    assert not any("core.invented" in f for f in report.blocking_findings)
+
+
+def test_partial_evidence_never_manufactures_a_hard_fail() -> None:
+    """A clean assessment over one scenario of six must not arrive as a blocking finding."""
+    many = ScenarioSet(
+        name="wide-set",
+        scenarios=[EchoScenario(id=f"w{i}", facts=FACTS, must_cite=["F1"]) for i in range(1, 7)],
+    )
+    script: Script = {
+        "w1": Step(artifact={"cited": ["F1"], "declined": False}),
+        **{f"w{i}": Step(level=Level.PROSE, artifact=None) for i in range(2, 7)},
+    }
+    report = run_evaluation(Tool(script), _rubric(), many, ECHO_PROFILE)
+    score = _cs(report, "core.invented")
+    assert score.verdict == Verdict.WEAK, score.evidence
+    assert not report.blocking_findings, report.blocking_findings
+
+
+def test_an_observed_failure_still_blocks_despite_partial_evidence() -> None:
+    """Capping must not defang a violation the check actually saw."""
+    script: Script = {
+        "s1": Step(artifact={"cited": ["F1"], "declined": False}),
+        "s2": Step(artifact={"cited": ["F2", "F3"], "declined": False}),  # real scope violation
+        "s3": Step(level=Level.PROSE, artifact=None),
+    }
+    report = _run(script)
+    assert any("core.scope" in f for f in report.blocking_findings), report.blocking_findings
 
 
 def test_when_nothing_is_judgeable_the_criterion_is_unmeasurable_not_failed() -> None:
@@ -695,3 +730,92 @@ def test_a_gap_a_probe_discovers_from_inside_is_still_the_rubrics() -> None:
     assert report.weighted_score is None, (
         "an unautomatable criterion leaves the score, not zeroes it"
     )
+
+
+def test_a_tool_cannot_relabel_its_way_out_of_a_finding() -> None:
+    """The same violation, re-attributed to a scenario that never forbade it.
+
+    Comparing the SET of ids could not see this, because nothing went missing: swapping two labels
+    took a run from 0.0 with a blocking finding to a clean 3.0, with the violating text still in the
+    report. A response has to answer the scenario it was handed.
+    """
+
+    class Relabeller(Tool):
+        def respond(self, scenario: EchoScenario) -> ToolResponse:
+            answer = super().respond(scenario)
+            swapped = {"s1": "s2", "s2": "s1"}.get(scenario.id, scenario.id)
+            return answer.model_copy(update={"scenario_id": swapped})
+
+    script = _good_script()
+    script["s2"] = Step(artifact={"cited": ["F2", "F3"], "declined": False})
+    with pytest.raises(EvaluationError, match="wrong scenario"):
+        run_evaluation(Relabeller(script), _rubric(), _scenarios(), ECHO_PROFILE)
+
+
+def test_an_empty_scenario_set_is_refused() -> None:
+    """A run that measured nothing must not read as a rubric gap with a clean report."""
+    with pytest.raises(ValueError, match="at least 1 item"):
+        ScenarioSet(name="empty", scenarios=[])
+
+
+def test_an_infinite_axis_weight_is_refused() -> None:
+    """A NaN headline compares False against every threshold instead of failing loudly."""
+    with pytest.raises(ValueError, match="finite"):
+        Axis(key="core", title="C", weight=float("inf"))
+
+
+def test_a_probe_cannot_report_scenarios_outside_its_relevance_as_unjudged() -> None:
+    """Naming ids it has no business in drove the judged count negative and manufactured a fail."""
+    from hai_eval.core.levels import Level as _Level
+    from hai_eval.core.profile import ProbeSpec, Profile, register_profile
+
+    def _overreach(_criterion: Criterion, evidence: Evidence[EchoArtifact]) -> Assessed:
+        return Assessed(
+            Verdict.STRONG,
+            "all clean",
+            unobserved=("ghost-a", "ghost-b", "ghost-c", "ghost-d"),
+        )
+
+    profile = register_profile(
+        Profile(
+            name="overreaching",
+            version="1",
+            scenario_model=EchoScenario,
+            artifact_model=EchoArtifact,
+            probes={"overreach": ProbeSpec(_overreach, {_Level.PROSE: ProbeTier.DETERMINISTIC})},
+            levels=frozenset({_Level.PROSE, _Level.STRUCTURED}),
+        )
+    )
+    rubric = Rubric(
+        name="over",
+        version="1",
+        profile="overreaching@1",
+        axes=[Axis(key="core", title="Core", weight=1.0, blocking_eligible=True)],
+        criteria=[
+            Criterion(
+                key="core.over",
+                axis="core",
+                title="t",
+                question="?",
+                probe="overreach",
+                tier=ProbeTier.DETERMINISTIC,
+            )
+        ],
+    )
+    report = run_evaluation(Tool(_good_script()), rubric, _scenarios(), profile)
+    score = _cs(report, "core.over")
+    assert score.verdict == Verdict.STRONG, score.evidence
+    assert not report.blocking_findings
+
+
+def test_a_check_that_observed_nothing_at_all_is_unmeasurable() -> None:
+    """Reached through the probe's own report, not only through a level shortfall."""
+    script: Script = {
+        "s1": Step(narrative="", artifact={"cited": ["F1"], "declined": False}),
+        "s2": Step(artifact={"cited": ["F2"], "declined": False}),
+        "s3": Step(artifact={"cited": [], "declined": True}),
+    }
+    score = _cs(_run(script), "core.token")
+    assert score.verdict is None, score.evidence
+    assert score.unmeasurable_cause == "tool"
+    assert score.counts_against_tool

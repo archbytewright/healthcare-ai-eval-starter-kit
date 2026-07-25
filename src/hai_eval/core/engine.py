@@ -210,32 +210,30 @@ def run_evaluation(
         len(scenario_set.scenarios),
     )
     draws: dict[str, list[ToolResponse]] = {}
+    misdirected: list[str] = []
     for scenario in scenario_set.scenarios:
-        for _ in range(samples):
+        for index in range(samples):
             response = tool.respond(scenario)
-            draws.setdefault(response.scenario_id, []).append(response)
+            # A response must answer the scenario it was HANDED. Checking only that the set of ids
+            # matched let a tool permute its own labels: the same violation, re-attributed to a
+            # scenario that never forbade it, took a run from 0.0 with a blocking finding to a clean
+            # 3.0. Comparing multisets cannot see that, because nothing goes missing.
+            if response.scenario_id != scenario.id:
+                label = scenario.id if samples == 1 else f"{scenario.id} sample {index + 1}"
+                misdirected.append(f"{label} answered as {response.scenario_id!r}")
+            draws.setdefault(scenario.id, []).append(response)
     responses = tuple(r for batch in draws.values() for r in batch)
+    if misdirected:
+        msg = f"responses answer the wrong scenario: {'; '.join(misdirected)}"
+        raise EvaluationError(msg)
 
     # An adapter returning the wrong scenario id used to shrink the run silently: the join dropped
     # unmatched cases, every emptied probe blamed the DATA for the adapter's bug, and
     # the thinned run scored full marks. Refuse instead.
-    want = sorted(s.id for s in scenario_set.scenarios)
-    got = sorted(draws)
-    if want != got or any(len(batch) != samples for batch in draws.values()):
-        missing = sorted(set(want) - set(got))
-        unexpected = sorted(set(got) - set(want))
-        msg = (
-            f"responses do not correspond to the scenario set: "
-            f"{len(responses)} response(s) for {len(want)} scenario(s) x {samples} sample(s)"
-        )
-        if missing:
-            msg += f"; nothing for {missing}"
-        if unexpected:
-            msg += f"; unknown scenario_id {unexpected}"
-        short = sorted(sid for sid, batch in draws.items() if len(batch) != samples)
-        if short:
-            msg += f"; wrong sample count for {short}"
-        raise EvaluationError(msg)
+    # No multiset check here any more. Once every response must answer the scenario it was handed
+    # (above), the ids and the per-scenario counts follow by construction -- the old guard became
+    # unreachable, and a check nothing can reach is indistinguishable from a check that does not
+    # work. Deleted rather than kept as reassurance.
 
     pairs: list[Pair[Any]] = []
     faulted_scenarios: set[str] = set()
@@ -430,12 +428,14 @@ def _score_one(
     # Withholding is thus exactly as costly as failing, which is the strictest honest treatment: a
     # tool that would have failed gains nothing, and one that would have passed loses by not
     # showing it.
-    unjudged = {p.scenario.id for p in short} | unobserved
+    # Scenarios nothing could judge -- evidence too thin, or the subject emitted nothing to look
+    # at. Intersected with the relevant set, because a probe naming ids outside its own relevance
+    # drove the count negative and produced a hard fail out of arithmetic.
+    unjudged = ({p.scenario.id for p in short} | unobserved) & {p.scenario.id for p in relevant}
     if unjudged:
         judged = len(relevant) - len(unjudged)
         if judged == 0:
-            # Nothing was judged at all, so there is no verdict to scale -- saying "fail" would
-            # assert something about behaviour nobody observed.
+            # Nothing judged at all: "fail" would assert something about behaviour nobody observed.
             return CriterionScore(
                 criterion_key=criterion.key,
                 axis=axis_key,
@@ -446,12 +446,21 @@ def _score_one(
                 unmeasurable_cause=Cause.TOOL.value,
                 counts_against_tool=True,
             )
-        scaled = round(float(verdict) * judged / len(relevant))
+        # CAP, never scale. Multiplying the verdict by the judged fraction did two opposite kinds of
+        # damage: round(STRONG * 1/6) == 0 manufactured a blocking hard fail whose own evidence read
+        # "no violations found", and concealment came out 1/n as costly as disclosure -- free once
+        # the set was large enough. Arithmetic must not invent a finding, in either direction.
+        #
+        # A verdict is what a check OBSERVED. Incomplete coverage cannot make that worse, and it
+        # must not let it stand as a clean bill: an exact claim cannot span scenarios nobody saw. So
+        # an observed failure survives intact and still blocks, while a pass over partial evidence
+        # caps at weak and cannot block. What it costs the tool is the cap plus counts_against_tool.
+        verdict = Verdict(min(int(verdict), int(Verdict.WEAK)))
         text = (
             f"{text} [judged {judged}/{len(relevant)} scenario(s); "
-            f"{', '.join(sorted(unjudged))} produced nothing to judge and count as zero]"
+            f"{', '.join(sorted(unjudged))} produced nothing to judge, so no complete claim is "
+            f"possible here]"
         )
-        verdict = Verdict(max(0, min(int(Verdict.STRONG), scaled)))
 
     # Only a DETERMINISTIC check may assert a hard fail. Anything less exact -- a screen, or a
     # criterion declared for human judgement -- caps at weak and says what it cannot see. Written as

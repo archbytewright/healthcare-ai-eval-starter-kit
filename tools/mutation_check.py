@@ -111,13 +111,6 @@ MUTATIONS: tuple[Mutation, ...] = (
         replace="return min(present, key=lambda t: TIER_ORDER[t])",
     ),
     Mutation(
-        name="pairing-guard-removed",
-        invariant="responses must correspond one-to-one with scenarios",
-        path="src/hai_eval/core/engine.py",
-        find="    if want != got or any(",
-        replace="    if False and any(",
-    ),
-    Mutation(
         name="profile-mismatch-allowed",
         invariant="a rubric may only be run against the profile it targets",
         path="src/hai_eval/core/engine.py",
@@ -185,11 +178,57 @@ MUTATIONS: tuple[Mutation, ...] = (
         replace="    if tier is ProbeTier.SCREEN and verdict < Verdict.STRONG:",
     ),
     Mutation(
+        name="relabelling-allowed",
+        invariant="a response must answer the scenario it was handed",
+        path="src/hai_eval/core/engine.py",
+        find="            if response.scenario_id != scenario.id:",
+        replace="            if False:",
+    ),
+    Mutation(
+        name="partial-evidence-scaled-not-capped",
+        invariant="arithmetic may not invent a verdict in either direction",
+        path="src/hai_eval/core/engine.py",
+        find="        verdict = Verdict(min(int(verdict), int(Verdict.WEAK)))",
+        replace=(
+            "        verdict = Verdict(\n"
+            "            max(0, min(3, round(float(verdict) * judged / len(relevant))))\n"
+            "        )"
+        ),
+    ),
+    Mutation(
+        name="unobserved-not-intersected",
+        invariant="a probe cannot report scenarios outside its own relevance as unjudged",
+        path="src/hai_eval/core/engine.py",
+        find=" & {p.scenario.id for p in relevant}",
+        replace="",
+    ),
+    Mutation(
+        name="nothing-judged-becomes-a-fail",
+        invariant="nothing observed is unmeasurable, not a failure",
+        path="src/hai_eval/core/engine.py",
+        find="        if judged == 0:",
+        replace="        if False:",
+    ),
+    Mutation(
+        name="empty-scenario-set-allowed",
+        invariant="a run must have something to measure",
+        path="src/hai_eval/core/models.py",
+        find="    scenarios: list[Scenario] = Field(min_length=1)",
+        replace="    scenarios: list[Scenario] = Field(default_factory=list)",
+    ),
+    Mutation(
+        name="infinite-axis-weight-allowed",
+        invariant="axis weights are finite, so the headline cannot become NaN",
+        path="src/hai_eval/core/models.py",
+        find="    weight: float = Field(gt=0.0, le=1000.0, allow_inf_nan=False)",
+        replace="    weight: float = Field(gt=0.0)",
+    ),
+    Mutation(
         name="unjudged-scenarios-vanish",
         invariant="a scenario nothing could judge scores zero rather than disappearing",
         path="src/hai_eval/core/engine.py",
-        find="    unjudged = {p.scenario.id for p in short} | unobserved",
-        replace="    unjudged = set()",
+        find="    if unjudged:\n        judged = len(relevant) - len(unjudged)",
+        replace="    if False:\n        judged = len(relevant) - len(unjudged)",
     ),
     Mutation(
         name="adapter-fault-blamed-on-tool",
@@ -230,8 +269,8 @@ MUTATIONS: tuple[Mutation, ...] = (
         name="samples-drawn-once",
         invariant="every scenario is drawn the requested number of times",
         path="src/hai_eval/core/engine.py",
-        find="        for _ in range(samples):",
-        replace="        for _ in range(1):",
+        find="        for index in range(samples):",
+        replace="        for index in range(1):",
     ),
     Mutation(
         name="empty-claims-allowed",

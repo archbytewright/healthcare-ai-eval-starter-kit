@@ -71,7 +71,9 @@ class ScenarioSet(BaseModel):
 
     name: str = Field(pattern=r"^[\w][\w .:-]{0,119}$")
     description: str = ""
-    scenarios: list[Scenario]
+    scenarios: list[Scenario] = Field(min_length=1)
+    """At least one. A run over nothing reported every criterion as the rubric's gap and returned a
+    clean report -- in a package whose thesis is that an absence is not a result."""
 
     @model_validator(mode="after")
     def _ids_unique(self) -> ScenarioSet:
@@ -113,7 +115,9 @@ class Axis(BaseModel):
     key: str = Field(pattern=_ID)
     title: str
     description: str = ""
-    weight: float = Field(gt=0.0)
+    weight: float = Field(gt=0.0, le=1000.0, allow_inf_nan=False)
+    """Bounded and finite: an infinite weight made the whole headline NaN, which then compared
+    False against every threshold in both directions rather than failing loudly."""
     blocking_eligible: bool = False
     """Whether a deterministic hard fail here may block adoption.
 
@@ -169,8 +173,8 @@ class Rubric(BaseModel):
     scale_max: int = Field(default=3, ge=1, le=3)
     """Bounded: it divides in the recommendation logic, and ``Verdict`` tops out at 3, so a larger
     ceiling would render a flawless tool as a fraction of something unreachable."""
-    axes: list[Axis]
-    criteria: list[Criterion]
+    axes: list[Axis] = Field(min_length=1)
+    criteria: list[Criterion] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _keys_unique_and_resolvable(self) -> Rubric:
