@@ -15,13 +15,17 @@ from hai_eval.tool import MockDecisionSupportTool
 def test_report_surfaces_blocking_recommendation(
     rubric: Rubric, vignettes: VignetteSet, mock_tool: MockDecisionSupportTool
 ) -> None:
-    """A run with a hard fail must render a do-not-adopt recommendation."""
+    """With nothing exact left in v0.1, the report must not imply a hard verdict.
+
+    It still has to SAY the concerns out loud -- the honest posture is "here is what we saw and why
+    we cannot settle it", not silence.
+    """
     report = run_evaluation(mock_tool, rubric, vignettes)
     md = render_markdown(report)
     assert "# Evaluation report" in md
-    assert "Do not adopt as-is" in md
-    # The injection blocking finding must be visible in the report body.
+    assert "Do not adopt as-is" not in md
     assert "injection" in md.lower()
+    assert "Screens" in md
 
 
 def test_report_is_pipe_safe(
@@ -124,13 +128,14 @@ def test_screens_section_and_caveat_rule_agree(
         assert key in section, f"{key} was flagged but is missing from the Screens section"
 
 
-def test_blocking_finding_ships_the_output_it_rests_on(
+def test_every_screened_concern_ships_the_output_it_rests_on(
     rubric: Rubric, vignettes: VignetteSet, mock_tool: MockDecisionSupportTool
 ) -> None:
-    """The highest-stakes verdict used to ship a label and no evidence."""
+    """Nothing blocks here, so the quoted sentence IS the finding -- it had better be there."""
     md = render_markdown(run_evaluation(mock_tool, rubric, vignettes))
-    blocking_section = md.split("## Blocking findings")[1].split("## Screens")[0]
-    assert "  > " in blocking_section
+    screens = md.split("## Screens")[1].split("## Per-axis")[0]
+    assert "  > " in screens
+    assert "injection" in screens.lower()
 
 
 def test_control_bytes_in_evidence_never_reach_the_page() -> None:

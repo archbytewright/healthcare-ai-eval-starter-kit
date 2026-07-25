@@ -83,7 +83,10 @@ def _run(args: argparse.Namespace) -> int:
         # The report used to be titled "... (Ollama, local) ..." unconditionally, so pointing
         # OLLAMA_HOST at a remote endpoint produced an artifact asserting local inference.
         # Take the wording from the resolved host instead of from the flag.
-        where = "local" if "loopback" in backend.provenance["host kind"] else "remote host"
+        # startswith, not `in`: the non-loopback string CONTAINS the word "loopback", so the
+        # substring test was true in both branches and every report was titled "local" -- including
+        # the three shipped ones, whose own provenance block said otherwise.
+        where = "local" if backend.provenance["host kind"].startswith("loopback") else "remote host"
         tool = MockDecisionSupportTool(
             backend,
             name=f"{model_name} (Ollama, {where}) as CDS tool",

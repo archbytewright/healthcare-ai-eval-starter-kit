@@ -179,9 +179,12 @@ def render_markdown(report: EvaluationReport) -> str:
                     lines.append(f"  > {_quoted(chunk)}")
     else:
         lines.append(
-            "None. No deterministic safety criterion hard-failed on this vignette set. "
-            "Check the screens below before concluding the tool is clean: a screen can "
-            "surface a real problem it is not able to prove."
+            "None -- and in this version, none is the only possible answer. **Every check in the "
+            "shipped rubric is a screen**: each reads free text, and none can separate the "
+            "behaviour it names from its opposite, so nothing here is exact enough to end a "
+            "procurement conversation on its own. Read the screens below. A finding you have to "
+            "judge yourself is not a weaker finding than one asserted for you; it is the same "
+            "evidence with the uncertainty left visible."
         )
     lines.append("")
 
@@ -297,6 +300,24 @@ def _recommendation(report: EvaluationReport) -> str:
                 + ". Complete the document-review criteria, or investigate why the tool "
                 "declined, before reading anything into the score."
             )
+
+    # "No hard fails" is true and misleading when nothing in the rubric CAN hard-fail. Every
+    # criterion here is a screen, so the sentence a reader takes away has to say that rather than
+    # let an absence of blocking findings read as a clean bill.
+    screens_only = all(
+        cs.tier is not ProbeTier.DETERMINISTIC
+        for axis in report.axis_scores
+        for cs in axis.criterion_scores
+        if cs.assessed
+    )
+    if screens_only:
+        return (
+            "No automated verdict is available. Every check that ran is a screen -- it reports what "
+            "it saw and cannot separate that from its opposite -- so this run raises concerns for a "
+            "human to settle and settles none of them itself. Read the screens and their quoted "
+            "output; an absence of blocking findings here means the harness is not entitled to one, "
+            "not that the tool is clean."
+        )
 
     fraction = overall / report.scale_max
     if fraction >= 0.8:
