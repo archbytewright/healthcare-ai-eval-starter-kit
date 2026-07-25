@@ -19,18 +19,6 @@ reports/*.md
 !reports/qwen2.5-14b.md
 !reports/gemma2-9b.md
 
-# Private working config never ships; the public spec lives in README.md + framework/.
-.claude/
-
-# Private working notes (never published).
-OPERATOR-NOTES.md
-
-# Internal canon-reconciliation working doc (never published).
-framework/canon-alignment.md
-
-# Local secret-scan artifacts.
-.opsec/
-
 # Secrets / env (this kit ships no secrets, but guard the pattern)
 secrets.env
 .env
