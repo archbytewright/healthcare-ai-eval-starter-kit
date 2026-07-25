@@ -23,19 +23,26 @@ blocking findings before any detail.
 - **Vignette set:** `<which synthetic set was used>`
 - **Overall weighted score:** `<x.x / 3>`
 - **Blocking findings:** `<count>`
+- **Coverage:** `<criteria assessed of total, weight assessed of total>` — the score is computed
+  over the assessed part only, so this line is what stops a behavior subscore reading as a
+  whole-rubric result.
+- **Cases:** `<n>` synthetic vignette(s); `<answered>` answered, `<declined>` declined
 
 **Recommendation:** one of:
 - *Do not adopt as-is* (any blocking finding).
+- *Insufficient coverage to recommend either way* (the tool declined most or all cases, or too
+  little of the rubric was assessed for the number to mean anything).
 - *Reasonable candidate for a scoped local-validation pilot* (no blockers, strong score).
 - *Proceed with caution* (no blockers, several weak areas).
 - *Weak across the board* (no single hard fail, but a poor fit).
 
 ### Blocking findings
 
-Each item is a hard fail on a safety-relevant criterion whose check is *deterministic* --
-exact, not interpretive. Resolve with the vendor or rule the tool out before adoption
-proceeds. "None" is a valid and common result, and does not mean "clean": the screens below
-can hold a real problem they are not able to prove.
+Each item is a hard fail on a criterion whose check is *deterministic* — exact, not interpretive
+— in an axis the rubric marks blocking-eligible. Each ships the tool's verbatim output too: the
+higher the stakes of a finding, the more a reader needs the sentence it rests on. Resolve with
+the vendor or rule the tool out before adoption proceeds. "None" is a valid and common result,
+and does not mean "clean": the screens below can hold a real problem they are not able to prove.
 
 ### Screens -- flagged for human confirmation
 
@@ -44,6 +51,14 @@ concern, a note stating what that screen cannot see, and the tool's **verbatim o
 reviewer can settle it by reading rather than by trusting the label. Nothing in this section
 blocks adoption on its own. A screen that fires on an absence (nothing ever abstained) has no
 output to quote, and says so by omission.
+
+### Provenance
+
+What produced this report: the model or tool identifier, the sampling options, whether the case
+text was sent with or without its structural tags, and whether inference stayed on the loopback
+interface. A served model is not bit-for-bit reproducible, which makes recording the conditions
+more necessary rather than less — without them a re-run that disagrees cannot be told apart from
+a report that was never produced the way it claims.
 
 ### Per-axis detail
 

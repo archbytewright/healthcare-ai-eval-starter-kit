@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
+from loguru import logger
 from pydantic import ValidationError
 
+from hai_eval.evaluator import registered_probes
 from hai_eval.models import Rubric, VignetteSet
 
 if TYPE_CHECKING:
@@ -64,6 +66,36 @@ def load_rubric(path: Path | None = None) -> Rubric:
     if dangling:
         msg = f"rubric criteria reference undeclared axes {dangling} in {target}"
         raise LoaderError(msg)
+
+    # A misspelled probe name used to be scored NOT_ASSESSED with a stderr warning nobody
+    # reads. Because unassessed criteria drop out of the axis mean, a one-character typo on
+    # the blocking criterion RAISED the score and removed the blocking finding: the failure
+    # direction was toward "safe". A probe the harness cannot run is a broken rubric, not a
+    # design decision -- except for the manual_ prefix, which declares human review on purpose.
+    known = registered_probes()
+    unknown = sorted(
+        {
+            c.probe
+            for c in rubric.criteria
+            if not c.probe.startswith("manual_") and c.probe not in known
+        }
+    )
+    if unknown:
+        msg = (
+            f"rubric names probe(s) the harness cannot run: {unknown} in {target}. "
+            f"Registered probes: {sorted(known)}. "
+            f"Use a 'manual_' prefix for criteria that are reviewed by a human."
+        )
+        raise LoaderError(msg)
+
+    # Blocking is opt-in per axis, so a rubric that marks nothing eligible can never produce a
+    # blocking finding. That may be deliberate; it must not be accidental.
+    if not any(axis.blocking_eligible for axis in rubric.axes):
+        logger.warning(
+            "rubric {} marks no axis blocking_eligible: no finding in this rubric can block "
+            "adoption, however severe",
+            target,
+        )
     return rubric
 
 

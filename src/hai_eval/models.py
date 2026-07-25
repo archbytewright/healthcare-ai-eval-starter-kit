@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from enum import IntEnum, StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Rubric definition (loaded from framework/rubric.yaml)
@@ -37,6 +37,10 @@ class Axis(BaseModel):
     title: str
     description: str
     weight: float = Field(gt=0.0, description="Relative weight; normalized at scoring time.")
+    # Whether a deterministic hard fail on this axis may block adoption. Declared in the
+    # rubric rather than matched against the literal axis key "safety" in code: an org is
+    # invited to re-weight and rename axes, and renaming one silently disabled all blocking.
+    blocking_eligible: bool = False
 
 
 class ProbeTier(StrEnum):
@@ -97,8 +101,27 @@ class Criterion(BaseModel):
     tier: ProbeTier = ProbeTier.SCREEN
     screen_caveat: str = ""
     guidance: str = ""
+
+    @model_validator(mode="after")
+    def _screen_declares_its_blind_spot(self) -> Criterion:
+        """A screen without a caveat fell back to boilerplate that read as reassurance.
+
+        The generic string ("treat the finding as unconfirmed") was appended to findings that
+        were in fact exact, so the fallback actively misinformed. Require the rubric to say
+        what this particular check cannot see.
+        """
+        if self.tier is ProbeTier.SCREEN and not self.screen_caveat.strip():
+            msg = (
+                f"criterion {self.key!r} is tier 'screen' but declares no screen_caveat; "
+                f"state what this check cannot see"
+            )
+            raise ValueError(msg)
+        return self
+
     # Which canonical framework this criterion derives from, so a reviewer can trace
-    # each line to a primary source (RUAIH area / NIST GenAI risk / CHAI / FDA / 1557).
+    # each line to a primary source (Responsible Use of AI in Healthcare area / NIST GenAI risk /
+    # CHAI / FDA). Note the rubric ships no fairness or subgroup-performance criterion, so nothing
+    # currently cites Section 1557 -- a real gap, not an oversight in the field list.
     source: str = ""
 
 
@@ -109,9 +132,27 @@ class Rubric(BaseModel):
 
     name: str
     version: str
-    scale_max: int = 3
+    # Bounded because it divides in the recommendation logic (0 raised ZeroDivisionError) and
+    # because Verdict tops out at 3: a larger scale_max makes a flawless tool render as a
+    # fraction of a ceiling it can never reach.
+    scale_max: int = Field(default=3, ge=1, le=3)
     axes: list[Axis]
     criteria: list[Criterion]
+
+    @model_validator(mode="after")
+    def _keys_are_unique_and_resolvable(self) -> Rubric:
+        """Duplicate keys double-counted an axis's weight and duplicated blocking findings."""
+        axis_keys = [a.key for a in self.axes]
+        dupe_axes = sorted({k for k in axis_keys if axis_keys.count(k) > 1})
+        if dupe_axes:
+            msg = f"duplicate axis key(s): {dupe_axes}"
+            raise ValueError(msg)
+        crit_keys = [c.key for c in self.criteria]
+        dupe_crits = sorted({k for k in crit_keys if crit_keys.count(k) > 1})
+        if dupe_crits:
+            msg = f"duplicate criterion key(s): {dupe_crits}"
+            raise ValueError(msg)
+        return self
 
     def axis(self, key: str) -> Axis:
         """Return the axis with ``key`` or raise ``KeyError``."""
@@ -145,7 +186,7 @@ class Vignette(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str
+    id: str = Field(pattern=r"^[\w][\w .:-]{0,79}$")
     title: str
     setting: str
     transcript: str
@@ -153,7 +194,38 @@ class Vignette(BaseModel):
     must_not_include: list[str] = Field(default_factory=list)
     out_of_scope: list[str] = Field(default_factory=list)
     injection: bool = False
+    # The literal string the embedded instruction asks the tool to emit. Declared per vignette
+    # so the HARNESS can check the tool's output for it: the previous design took the adapter's
+    # word for whether the injection was followed, which made the only blocking criterion in
+    # the rubric a self-report from the party under evaluation.
+    injection_canary: str = ""
+    # Marks a case where declining IS the right answer, so the abstention probe can score
+    # appropriateness rather than mere capability.
+    expect_abstention: bool = False
     notes: str = ""
+
+    @field_validator("must_include", "must_not_include", "out_of_scope")
+    @classmethod
+    def _usable_annotations(cls, values: list[str]) -> list[str]:
+        """Reject annotations too short to mean anything.
+
+        An empty string matches every output unconditionally, and a one- or two-character
+        token matches inside unrelated words ("ACE" inside "antACid"), so both silently
+        fabricate a result. The YAML header asked authors not to do this; asking is not a
+        control.
+        """
+        for v in values:
+            if len(v.strip()) < 3:
+                msg = f"annotation {v!r} is too short to match reliably (need 3+ characters)"
+                raise ValueError(msg)
+        return values
+
+    @model_validator(mode="after")
+    def _injection_declares_canary(self) -> Vignette:
+        if self.injection and not self.injection_canary:
+            msg = f"vignette {self.id!r} sets injection: true but declares no injection_canary"
+            raise ValueError(msg)
+        return self
 
 
 class VignetteSet(BaseModel):
@@ -161,9 +233,24 @@ class VignetteSet(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
+    name: str = Field(pattern=r"^[\w][\w .:-]{0,119}$")
     description: str
     vignettes: list[Vignette]
+
+    @field_validator("vignettes")
+    @classmethod
+    def _unique_ids(cls, values: list[Vignette]) -> list[Vignette]:
+        """Duplicate ids made one vignette's annotations score another's output.
+
+        ``Evidence.paired()`` keys outputs by id, so a repeated id silently paired the wrong
+        text with the wrong expectations and reported a safety failure that never happened.
+        """
+        seen = [v.id for v in values]
+        dupes = sorted({i for i in seen if seen.count(i) > 1})
+        if dupes:
+            msg = f"duplicate vignette id(s): {dupes}"
+            raise ValueError(msg)
+        return values
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +335,36 @@ class AxisScore(BaseModel):
         return sum(assessed) / len(assessed)
 
 
+class Coverage(BaseModel):
+    """How much of the rubric and the case set the headline number actually rests on.
+
+    The overall score drops unassessed axes from both numerator and denominator, which is the
+    right arithmetic and a misleading presentation on its own: with the shipped rubric half
+    the weight is document review, so "1.1 / 3" was a safety-plus-workflow subscore printed as
+    though it covered five axes. Reporting coverage alongside the number is the difference
+    between an honest partial measurement and an overstated whole one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    criteria_assessed: int
+    criteria_total: int
+    weight_assessed: float
+    weight_total: float
+    cases_total: int
+    cases_abstained: list[str] = Field(default_factory=list)
+
+    @property
+    def weight_fraction(self) -> float:
+        """Share of declared axis weight the score was computed over."""
+        return self.weight_assessed / self.weight_total if self.weight_total else 0.0
+
+    @property
+    def cases_answered(self) -> int:
+        """Cases where the tool produced an artifact rather than declining."""
+        return self.cases_total - len(self.cases_abstained)
+
+
 class EvaluationReport(BaseModel):
     """The full result of evaluating one tool against one rubric + vignette set."""
 
@@ -260,6 +377,10 @@ class EvaluationReport(BaseModel):
     vignette_set: str
     axis_scores: list[AxisScore]
     blocking_findings: list[str] = Field(default_factory=list)
+    coverage: Coverage | None = None
+    # Free-form run facts an adapter can supply (model digest, sampling options, host kind).
+    # A report that cannot say what produced it cannot be audited or reproduced.
+    provenance: dict[str, str] = Field(default_factory=dict)
 
     @property
     def weighted_score(self) -> float | None:

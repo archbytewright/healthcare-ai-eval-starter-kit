@@ -95,9 +95,7 @@ def test_cli_rejects_unrecognized_model(tmp_path: Path) -> None:
     assert not out.exists()
 
 
-def test_cli_ollama_dispatch_writes_report(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_cli_ollama_dispatch_writes_report(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """--model ollama:<name> routes through OllamaModel and writes a named report."""
     monkeypatch.setattr(
         "urllib.request.urlopen", _reply({"message": {"content": "Conservative management."}})

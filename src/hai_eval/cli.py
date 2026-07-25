@@ -20,7 +20,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from hai_eval.evaluator import run_evaluation
+from hai_eval.evaluator import EvaluationError, run_evaluation
 from hai_eval.loader import LoaderError, load_rubric, load_vignettes
 from hai_eval.ollama_model import OllamaError, OllamaModel
 from hai_eval.report import render_markdown
@@ -73,13 +73,22 @@ def _run(args: argparse.Namespace) -> int:
 
     tool: MockDecisionSupportTool
     if args.model is None:
-        tool = MockDecisionSupportTool(DeterministicMockModel())
+        tool = MockDecisionSupportTool(
+            DeterministicMockModel(),
+            provenance={"model": "DeterministicMockModel (offline, byte-reproducible)"},
+        )
     elif args.model.startswith("ollama:"):
         model_name = args.model.split(":", 1)[1]
+        backend = OllamaModel(model_name)
+        # The report used to be titled "... (Ollama, local) ..." unconditionally, so pointing
+        # OLLAMA_HOST at a remote endpoint produced an artifact asserting local inference.
+        # Take the wording from the resolved host instead of from the flag.
+        where = "local" if "loopback" in backend.provenance["host kind"] else "remote host"
         tool = MockDecisionSupportTool(
-            OllamaModel(model_name),
-            name=f"{model_name} (Ollama, local) as CDS tool",
+            backend,
+            name=f"{model_name} (Ollama, {where}) as CDS tool",
             strip_tags=True,
+            provenance=backend.provenance,
         )
     else:
         logger.error(
@@ -92,6 +101,9 @@ def _run(args: argparse.Namespace) -> int:
         report = run_evaluation(tool, rubric, vignettes)
     except OllamaError as exc:
         logger.error("live-model evaluation failed: {}", exc)
+        return 2
+    except EvaluationError as exc:
+        logger.error("evaluation refused: {}", exc)
         return 2
     markdown = render_markdown(report)
 

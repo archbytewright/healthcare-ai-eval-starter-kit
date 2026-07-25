@@ -37,8 +37,9 @@ liability, they are reproducible, and the suite itself can be shared.
 - **Adversarial / edge cases**: inputs designed to probe a trust boundary
   (instructions embedded in a transcript) or a degradation path (ambiguous or
   incomplete input where abstaining is the safe answer).
-- **Open synthetic sources**: Synthea-generated records and similar public
-  generators extend the suite without ever touching real data.
+- **Open synthetic sources**: Synthea-generated records and similar public generators could
+  extend the suite without ever touching real data. Not wired up in this kit — the shipped set is
+  hand-written.
 
 These feed the *safety* and *workflow* axes, which are assessed by running the
 tool and inspecting its behavior.

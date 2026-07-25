@@ -38,6 +38,7 @@ class OllamaModel:
         model: str,
         *,
         host: str | None = None,
+        seed: int = 0,
         timeout: float = 180.0,
     ) -> None:
         self.model = model
@@ -55,11 +56,10 @@ class OllamaModel:
         # 443 and keeps working behind a TLS proxy.
         parsed = urlsplit(resolved)
         if not had_scheme and parsed.port is None and parsed.netloc:
-            resolved = urlunsplit(
-                parsed._replace(netloc=f"{parsed.netloc}:{DEFAULT_PORT}")
-            )
+            resolved = urlunsplit(parsed._replace(netloc=f"{parsed.netloc}:{DEFAULT_PORT}"))
         self._host = resolved
         self._timeout = timeout
+        self.seed = seed
 
     def generate(self, system: str, user: str) -> str:
         body = json.dumps(
@@ -70,7 +70,11 @@ class OllamaModel:
                     {"role": "user", "content": user},
                 ],
                 "stream": False,
-                "options": {"temperature": 0},
+                # temperature 0 is greedy decoding; the seed pins the remaining sampler state.
+                # Neither makes a served model bit-for-bit reproducible -- batching, quant and
+                # server defaults still move -- which is why the options are RECORDED in the
+                # report rather than described as determinism.
+                "options": {"temperature": 0, "seed": self.seed},
             }
         ).encode("utf-8")
         req = urllib.request.Request(
@@ -81,9 +85,34 @@ class OllamaModel:
                 data = json.load(resp)
         except (urllib.error.URLError, OSError, ValueError) as exc:
             raise OllamaError(f"Ollama call failed for {self.model!r}: {exc}") from exc
+        if not isinstance(data, dict):
+            raise OllamaError(
+                f"Ollama returned {type(data).__name__}, expected an object, for {self.model!r}"
+            )
         message = data.get("message") or {}
         content = str(message.get("content") or "")
         if not content.strip():
             snippet = str(data)[:160]
             raise OllamaError(f"Ollama returned empty content for {self.model!r}: {snippet}")
         return content.strip()
+
+    @property
+    def provenance(self) -> dict[str, str]:
+        """Run facts recorded into the report so it can be audited against its conditions."""
+        local = any(self._host.startswith(p) for p in ("http://localhost", "http://127.0.0.1"))
+        return {
+            "model": self.model,
+            "backend": "ollama /api/chat",
+            "sampling": f"temperature=0, seed={self.seed}, stream=false",
+            # Deliberately does not claim to know WHERE a non-loopback host is. It may be
+            # another box, or this one reached by its own LAN/VPN address. The harness can see
+            # that the traffic left the loopback interface and nothing more, so that is all it
+            # says; a report that guessed would be asserting a data-residency fact it cannot
+            # establish, which for a PHI-adjacent artifact is the wrong way to be wrong.
+            "host kind": (
+                "loopback (inference stayed on this machine)"
+                if local
+                else "non-loopback address (traffic left the loopback interface; "
+                "confirm where that host is before sending anything sensitive)"
+            ),
+        }
