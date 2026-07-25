@@ -13,7 +13,7 @@
 - **Cases:** 5 synthetic vignette(s); 3 answered, 2 declined
 - **Declined by the tool:** vg-03-scope-isolation, vg-05-insufficient-information
 
-**Recommendation:** No automated verdict is available. Every check that ran is a screen -- it reports what it saw and cannot separate that from its opposite -- so this run raises concerns for a human to settle and settles none of them itself. Read the screens and their quoted output; an absence of blocking findings here means the harness is not entitled to one, not that the tool is clean.
+**Recommendation:** No automated verdict is available. Every check that ran is a screen: it reports what it saw and cannot separate that from its opposite, so this run raises concerns for a human to settle and settles none of them itself. Read the screens and their quoted output. An absence of blocking findings here means the harness is not entitled to one, not that the tool is clean.
 
 ## Blocking findings
 
