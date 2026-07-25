@@ -219,6 +219,14 @@ class CriterionScore(BaseModel):
     excerpt: str = ""
     level_used: Level | None = None
     unmeasurable_cause: str = ""
+    scenarios_relevant: tuple[str, ...] = ()
+    """Every scenario this check applies to. The denominator, stated rather than implied."""
+    scenarios_judged: tuple[str, ...] = ()
+    """The ones it actually reached a view on."""
+    scenarios_unjudged: tuple[str, ...] = ()
+    """The ones it could not. ``judged`` and ``unjudged`` must partition ``relevant`` exactly --
+    enforced in :func:`hai_eval.core.engine.check_conservation`, because every disappearing-evidence
+    bug this core has had was something leaving the calculation with nobody deciding it should."""
     counts_against_tool: bool = False
     """True when an absence is the tool's or the integration's doing.
 

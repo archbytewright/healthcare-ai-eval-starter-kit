@@ -567,13 +567,13 @@ def test_a_scenario_is_scored_at_its_weakest_sample() -> None:
     assert {lvl for _, lvl in report.coverage.levels_reached} == {"prose"}
 
 
-def test_a_pass_over_partial_evidence_caps_and_cannot_block() -> None:
-    """An exact claim cannot span scenarios nobody saw -- but it must not be INVENTED either.
+def test_a_pass_over_partial_evidence_is_not_measured_at_all() -> None:
+    """An exact claim cannot span scenarios nobody saw, and must not be invented either.
 
-    The first version scaled the verdict by the judged fraction, which did opposite damage in both
-    directions: ``round(STRONG * 1/6) == 0`` manufactured a blocking hard fail whose own evidence
-    read "no violations found", and concealment came out 1/n as costly as disclosure, free once the
-    set was large enough. Capping does neither.
+    Three wrong answers preceded this one, each found by a property that generates both sides.
+    Zeroing and scaling both MANUFACTURED hard fails out of clean assessments. Capping at weak let
+    concealment turn an observed failure into a point. Not-measured is the only treatment monotone
+    in both directions.
     """
     script: Script = {
         "s1": Step(artifact={"cited": ["F1"], "declined": False}),
@@ -582,8 +582,9 @@ def test_a_pass_over_partial_evidence_caps_and_cannot_block() -> None:
     }
     report = _run(script)
     score = _cs(report, "core.invented")
-    assert score.verdict == Verdict.WEAK, score.evidence
-    assert "no complete claim is possible" in score.evidence
+    assert score.verdict is None, score.evidence
+    assert score.unmeasurable_cause == "tool"
+    assert "not measured" in score.evidence
     assert score.counts_against_tool
     assert not any("core.invented" in f for f in report.blocking_findings)
 
@@ -600,7 +601,7 @@ def test_partial_evidence_never_manufactures_a_hard_fail() -> None:
     }
     report = run_evaluation(Tool(script), _rubric(), many, ECHO_PROFILE)
     score = _cs(report, "core.invented")
-    assert score.verdict == Verdict.WEAK, score.evidence
+    assert score.verdict is None, score.evidence
     assert not report.blocking_findings, report.blocking_findings
 
 
@@ -819,3 +820,45 @@ def test_a_check_that_observed_nothing_at_all_is_unmeasurable() -> None:
     assert score.verdict is None, score.evidence
     assert score.unmeasurable_cause == "tool"
     assert score.counts_against_tool
+
+
+def test_the_conservation_check_rejects_an_inconsistent_report() -> None:
+    """The accounting identity itself: judged and unjudged must partition the relevant set."""
+    from hai_eval.core.engine import ConservationError, check_conservation
+
+    report = _run(_good_script())
+    broken = report.axis_scores[0].criterion_scores[0]
+    tampered = broken.model_copy(update={"scenarios_judged": (), "scenarios_unjudged": ()})
+    axis = report.axis_scores[0]
+    report = report.__class__(
+        **{
+            **{f: getattr(report, f) for f in report.__dataclass_fields__},
+            "axis_scores": (
+                axis.__class__(
+                    axis_key=axis.axis_key,
+                    title=axis.title,
+                    weight=axis.weight,
+                    criterion_scores=(tampered, *axis.criterion_scores[1:]),
+                ),
+                *report.axis_scores[1:],
+            ),
+        }
+    )
+    with pytest.raises(ConservationError, match="do not account"):
+        check_conservation(report, _rubric())
+
+
+def test_every_run_is_conservation_checked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The wiring, not just the function. A guard nobody calls is a guard that does not exist."""
+    import hai_eval.core.engine as engine_module
+
+    called: list[str] = []
+    original = engine_module.check_conservation
+
+    def spy(report: object, rubric: object) -> None:
+        called.append(getattr(report, "tool_name", "?"))
+        original(report, rubric)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(engine_module, "check_conservation", spy)
+    _run(_good_script())
+    assert called, "run_evaluation must check conservation before returning"

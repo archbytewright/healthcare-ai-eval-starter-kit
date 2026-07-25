@@ -21,7 +21,7 @@ from hypothesis import strategies as st
 from hai_eval.core.engine import run_evaluation
 from hai_eval.core.levels import Level
 from hai_eval.core.models import Axis, Criterion, Fact, Rubric, ScenarioSet, ToolResponse
-from hai_eval.core.verdicts import ProbeTier
+from hai_eval.core.verdicts import ProbeTier, Verdict
 from tests.doubles.echo_profile import ECHO_PROFILE, EchoScenario
 
 FACTS = [Fact(id=f"F{i}", text=f"fact {i}") for i in range(1, 5)]
@@ -296,3 +296,116 @@ def test_the_score_stays_inside_the_scale(withheld: list[str], answers_well: boo
     report = run_evaluation(_Scripted(script), RUBRIC, _scenarios(), ECHO_PROFILE)
     if report.weighted_score is not None:
         assert 0.0 <= report.weighted_score <= RUBRIC.scale_max
+
+
+# ---------------------------------------------------------------------------
+# The conservation guards: the CLASS, not another instance of it
+#
+# Every disappearing-evidence bug across three review rounds -- a criterion dropped by a mistyped
+# probe name, an axis whose weight left the divisor, a scenario erased by a run-wide level gate, a
+# denominator shrunk by a probe naming ids outside its relevance, a verdict manufactured by scaling
+# -- was one class: something left the calculation without anyone deciding it should. Each was fixed
+# individually while the class stayed open. These generalise instead.
+# ---------------------------------------------------------------------------
+
+_CITATIONS = st.lists(st.sampled_from(["F1", "F2", "F3", "F4", "F99"]), unique=True, max_size=3)
+_NARRATIVES = st.sampled_from(["", "a recommendation", "zzz here", "declining, too little"])
+
+
+@st.composite
+def _responses(draw: st.DrawFn, scenario_id: str) -> ToolResponse:
+    """An arbitrary response: any citations, any decline flag, any narrative, any level."""
+    structured = draw(st.booleans())
+    return ToolResponse(
+        scenario_id=scenario_id,
+        narrative=draw(_NARRATIVES),
+        level=Level.STRUCTURED if structured else Level.PROSE,
+        artifact=(
+            {"cited": draw(_CITATIONS), "declined": draw(st.booleans())} if structured else None
+        ),
+    )
+
+
+@st.composite
+def _scripts(draw: st.DrawFn) -> dict[str, ToolResponse]:
+    return {sid: draw(_responses(sid)) for sid in SCENARIO_IDS}
+
+
+def _strip_artifact(r: ToolResponse) -> ToolResponse:
+    return r.model_copy(update={"level": Level.PROSE, "artifact": None})
+
+
+def _strip_narrative(r: ToolResponse) -> ToolResponse:
+    return r.model_copy(update={"narrative": ""})
+
+
+def _strip_both(r: ToolResponse) -> ToolResponse:
+    return _strip_narrative(_strip_artifact(r))
+
+
+_REMOVALS = st.sampled_from([_strip_artifact, _strip_narrative, _strip_both])
+"""Pure information REMOVAL. Deliberately excludes declining, which is a change of behaviour and on
+some scenarios the correct one -- an earlier version generated it as concealment and duly failed on
+a tool that had simply done the right thing."""
+
+
+@settings(max_examples=400, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(
+    script=_scripts(),
+    targets=st.lists(st.sampled_from(SCENARIO_IDS), unique=True, min_size=1, max_size=3),
+    removal=_REMOVALS,
+)
+def test_removing_information_never_raises_the_score(
+    script: dict[str, ToolResponse], targets: list[str], removal: Withholding
+) -> None:
+    """For ANY tool and ANY information removal: the score does not go up.
+
+    Generated on both sides now. The earlier version enumerated four hand-picked withholdings
+    against two hand-written baselines, which tests the four cases I thought of -- and the bugs were
+    always in the fifth.
+    """
+    before = _score(script)
+    after_script = dict(script)
+    for sid in targets:
+        after_script[sid] = removal(after_script[sid])
+    after = _score(after_script)
+    assert after <= before + 1e-9, (
+        f"removing information on {targets} raised the score: {after} > {before}"
+    )
+
+
+@settings(max_examples=400, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(script=_scripts())
+def test_every_criterion_is_accounted_for(script: dict[str, ToolResponse]) -> None:
+    """Whatever the tool does, nothing leaves the calculation unannounced.
+
+    ``run_evaluation`` asserts this internally on every run; generating arbitrary tools is what
+    makes the assertion mean something rather than pass on the three scripts I wrote by hand.
+    """
+    report = run_evaluation(_Scripted(script), RUBRIC, _scenarios(), ECHO_PROFILE)
+    scored = [cs for axis in report.axis_scores for cs in axis.criterion_scores]
+    assert sorted(cs.criterion_key for cs in scored) == sorted(c.key for c in RUBRIC.criteria)
+    for cs in scored:
+        assert cs.verdict is not None or cs.unmeasurable_cause, cs.criterion_key
+        judged, unjudged = set(cs.scenarios_judged), set(cs.scenarios_unjudged)
+        assert not (judged & unjudged), cs.criterion_key
+        assert judged | unjudged == set(cs.scenarios_relevant), cs.criterion_key
+
+
+@settings(max_examples=200, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(script=_scripts())
+def test_a_blocking_finding_always_rests_on_a_judged_scenario(
+    script: dict[str, ToolResponse],
+) -> None:
+    """Nothing may block on evidence nobody saw.
+
+    The sharpest instance this catches: scaling a clean assessment down to zero produced a blocking
+    finding whose own text read "no invented citations". A block has to come from something judged.
+    """
+    report = run_evaluation(_Scripted(script), RUBRIC, _scenarios(), ECHO_PROFILE)
+    by_key = {cs.criterion_key: cs for axis in report.axis_scores for cs in axis.criterion_scores}
+    for finding in report.blocking_findings:
+        cs = by_key[finding.split(":", 1)[0]]
+        assert cs.scenarios_judged, f"{cs.criterion_key} blocked with nothing judged"
+        assert cs.verdict == Verdict.FAIL
+        assert cs.tier is ProbeTier.DETERMINISTIC

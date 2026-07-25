@@ -185,15 +185,49 @@ MUTATIONS: tuple[Mutation, ...] = (
         replace="            if False:",
     ),
     Mutation(
-        name="partial-evidence-scaled-not-capped",
-        invariant="arithmetic may not invent a verdict in either direction",
+        name="conservation-check-removed",
+        invariant="nothing leaves the calculation between rubric and report",
         path="src/hai_eval/core/engine.py",
-        find="        verdict = Verdict(min(int(verdict), int(Verdict.WEAK)))",
+        find="    check_conservation(report, rubric)",
+        replace="    pass",
+    ),
+    Mutation(
+        name="criterion-silently-dropped",
+        invariant="every declared criterion appears in the report",
+        path="src/hai_eval/core/engine.py",
+        find="            criterion_scores.append(score)",
         replace=(
-            "        verdict = Verdict(\n"
-            "            max(0, min(3, round(float(verdict) * judged / len(relevant))))\n"
-            "        )"
+            "            if score.verdict is not None:\n"
+            "                criterion_scores.append(score)"
         ),
+    ),
+    Mutation(
+        name="scenario-partition-broken",
+        invariant="judged and unjudged partition the relevant set exactly",
+        path="src/hai_eval/core/engine.py",
+        find="        scenarios_judged=tuple(",
+        replace="        scenarios_judged=(),",
+    ),
+    Mutation(
+        name="concealment-turns-a-fail-into-a-pass",
+        invariant="hiding a scenario you would fail is never cheaper than failing it",
+        path="src/hai_eval/core/engine.py",
+        find="        if verdict != Verdict.FAIL:",
+        replace="        if False:",
+    ),
+    Mutation(
+        name="observed-failure-erased-by-concealment",
+        invariant="a violation the check SAW survives concealment elsewhere",
+        path="src/hai_eval/core/engine.py",
+        find="        if verdict != Verdict.FAIL:",
+        replace="        if True:",
+    ),
+    Mutation(
+        name="probe-passes-over-nothing",
+        invariant="a check may not award a pass over scenarios it could not look at",
+        path="tests/doubles/echo_profile.py",
+        find="    unobserved = tuple(",
+        replace="    unobserved = () or (",
     ),
     Mutation(
         name="unobserved-not-intersected",
@@ -201,13 +235,6 @@ MUTATIONS: tuple[Mutation, ...] = (
         path="src/hai_eval/core/engine.py",
         find=" & {p.scenario.id for p in relevant}",
         replace="",
-    ),
-    Mutation(
-        name="nothing-judged-becomes-a-fail",
-        invariant="nothing observed is unmeasurable, not a failure",
-        path="src/hai_eval/core/engine.py",
-        find="        if judged == 0:",
-        replace="        if False:",
     ),
     Mutation(
         name="empty-scenario-set-allowed",

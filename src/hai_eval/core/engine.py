@@ -7,6 +7,7 @@ score. Each of those was a place where v0.1 trusted something it should have bee
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -21,7 +22,13 @@ from hai_eval.core.profile import Profile, weakest
 from hai_eval.core.verdicts import ProbeTier, Verdict
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from hai_eval.core.models import Criterion, ScenarioSet
+
+
+def _ids(pairs: Sequence[Pair[Any]]) -> tuple[str, ...]:
+    return tuple(sorted(p.scenario.id for p in pairs))
 
 
 MANUAL_PREFIX = "manual_"
@@ -222,7 +229,6 @@ def run_evaluation(
                 label = scenario.id if samples == 1 else f"{scenario.id} sample {index + 1}"
                 misdirected.append(f"{label} answered as {response.scenario_id!r}")
             draws.setdefault(scenario.id, []).append(response)
-    responses = tuple(r for batch in draws.values() for r in batch)
     if misdirected:
         msg = f"responses answer the wrong scenario: {'; '.join(misdirected)}"
         raise EvaluationError(msg)
@@ -319,7 +325,7 @@ def run_evaluation(
         "; ".join(integration_faults) if integration_faults else "none detected"
     )
 
-    return EvaluationReport(
+    report = EvaluationReport(
         tool_name=tool.name,
         rubric_name=rubric.name,
         rubric_version=rubric.version,
@@ -331,6 +337,77 @@ def run_evaluation(
         coverage=coverage,
         provenance=provenance,
     )
+    check_conservation(report, rubric)
+    return report
+
+
+class ConservationError(EvaluationError):
+    """Something left the calculation without anyone deciding it should.
+
+    Raised, not logged. Every disappearing-evidence bug this core has had -- a criterion dropped by
+    a mistyped probe name, an axis whose weight left the divisor, a scenario erased by a level gate,
+    a denominator shrunk by a probe naming ids outside its own relevance -- was an instance of one
+    class, and each was fixed one at a time while the class stayed open. This is the class.
+    """
+
+
+def check_conservation(report: EvaluationReport, rubric: Rubric) -> None:
+    """Assert that nothing vanished between the rubric and the report.
+
+    Three identities, each of which a past bug violated:
+
+    1. **Disposition completeness.** Every criterion the rubric declares appears in the report
+       exactly once, carrying either a verdict or a stated cause. A criterion cannot be silently
+       absent, and it cannot be present with no disposition.
+    2. **Scenario partition.** For every criterion, the scenarios it judged and the ones it could
+       not partition the scenarios it applies to -- disjoint, and together exhaustive. A shrunken
+       denominator shows up here as an arithmetic failure rather than as a better score.
+    3. **Weight accounting.** Every axis is either scored or explicitly unassessed, and the weight
+       said to be covered equals the weight of the axes that actually produced something.
+
+    Called at the end of every run. It has never yet fired in anger; that is the point of an
+    accounting identity, and it is cheap enough to keep asserting.
+    """
+    scored = [cs for axis in report.axis_scores for cs in axis.criterion_scores]
+
+    declared = [c.key for c in rubric.criteria]
+    present = [cs.criterion_key for cs in scored]
+    if sorted(declared) != sorted(present):
+        missing = sorted(set(declared) - set(present))
+        extra = sorted(set(present) - set(declared))
+        msg = f"criteria lost between rubric and report: missing={missing} unexpected={extra}"
+        raise ConservationError(msg)
+
+    for cs in scored:
+        if cs.verdict is None and not cs.unmeasurable_cause:
+            msg = f"{cs.criterion_key}: no verdict and no reason -- a criterion with no disposition"
+            raise ConservationError(msg)
+        judged, unjudged = set(cs.scenarios_judged), set(cs.scenarios_unjudged)
+        relevant = set(cs.scenarios_relevant)
+        if judged & unjudged:
+            both = sorted(judged & unjudged)
+            msg = f"{cs.criterion_key}: scenario(s) both judged and unjudged: {both}"
+            raise ConservationError(msg)
+        if judged | unjudged != relevant:
+            lost = sorted(relevant - (judged | unjudged))
+            invented = sorted((judged | unjudged) - relevant)
+            msg = (
+                f"{cs.criterion_key}: scenarios do not account for the relevant set "
+                f"(unaccounted={lost}, invented={invented})"
+            )
+            raise ConservationError(msg)
+
+    counted = sum(
+        axis.weight
+        for axis in report.axis_scores
+        if any(cs.verdict is not None or cs.counts_against_tool for cs in axis.criterion_scores)
+    )
+    if abs(counted - report.coverage.weight_scored) > 1e-9:
+        msg = (
+            f"weight accounting disagrees: coverage says {report.coverage.weight_scored}, "
+            f"the axes that produced something total {counted}"
+        )
+        raise ConservationError(msg)
 
 
 def _score_one(
@@ -350,6 +427,9 @@ def _score_one(
             evidence=f"declared for human review ({criterion.probe})",
             tier=ProbeTier.MANUAL,
             unmeasurable_cause=Cause.RUBRIC.value,
+            scenarios_relevant=(),
+            scenarios_judged=(),
+            scenarios_unjudged=(),
         )
     spec = profile.probes[criterion.probe]  # validated at entry to run_evaluation
 
@@ -366,6 +446,9 @@ def _score_one(
             evidence="no scenario in this set exercises this criterion",
             tier=criterion.tier,
             unmeasurable_cause=Cause.RUBRIC.value,
+            scenarios_relevant=(),
+            scenarios_judged=(),
+            scenarios_unjudged=(),
         )
 
     usable = tuple(p for p in relevant if spec.tier_at(p.level) is not None)
@@ -389,6 +472,9 @@ def _score_one(
             ),
             tier=criterion.tier,
             unmeasurable_cause=cause.value,
+            scenarios_relevant=_ids(relevant),
+            scenarios_judged=(),
+            scenarios_unjudged=_ids(relevant),
             counts_against_tool=True,
         )
 
@@ -404,6 +490,9 @@ def _score_one(
             evidence=outcome.reason,
             tier=criterion.tier,
             unmeasurable_cause=outcome.cause.value,
+            scenarios_relevant=_ids(relevant),
+            scenarios_judged=(),
+            scenarios_unjudged=_ids(relevant),
             counts_against_tool=outcome.cause in (Cause.TOOL, Cause.ADAPTER),
         )
 
@@ -434,32 +523,39 @@ def _score_one(
     unjudged = ({p.scenario.id for p in short} | unobserved) & {p.scenario.id for p in relevant}
     if unjudged:
         judged = len(relevant) - len(unjudged)
-        if judged == 0:
-            # Nothing judged at all: "fail" would assert something about behaviour nobody observed.
+        # An OBSERVED failure stands, whatever else was concealed. Otherwise a tool could disarm a
+        # violation the check plainly saw by going quiet on a different scenario.
+        if verdict != Verdict.FAIL:
+            # Everything else becomes NOT MEASURED, contributing zero and blocking nothing.
+            #
+            # Capping at weak was the third wrong answer here, and the property that generates both
+            # sides found it: concealment turned an observed FAIL into a WEAK, so hiding the one
+            # scenario you would fail on paid a point. Scaling was the second (it manufactured hard
+            # fails out of clean assessments). Zeroing was the first (same manufacture).
+            #
+            # This is the only treatment that is monotone in both directions: hiding a scenario you
+            # would fail scores the same as failing it, hiding one you would pass costs you the
+            # whole criterion, and nothing is ever asserted about behaviour nobody watched.
             return CriterionScore(
                 criterion_key=criterion.key,
                 axis=axis_key,
                 verdict=None,
-                evidence=f"{text} [nothing judgeable in any of {len(relevant)} scenario(s)]",
+                evidence=(
+                    f"{text} [judged only {judged}/{len(relevant)} scenario(s); "
+                    f"{', '.join(sorted(unjudged))} produced nothing to judge, so this criterion "
+                    f"is not measured -- the gap is the tool's, and it counts as such]"
+                ),
                 tier=tier,
                 excerpt=excerpt,
                 unmeasurable_cause=Cause.TOOL.value,
+                scenarios_relevant=_ids(relevant),
+                scenarios_judged=tuple(sorted({p.scenario.id for p in relevant} - unjudged)),
+                scenarios_unjudged=tuple(sorted(unjudged)),
                 counts_against_tool=True,
             )
-        # CAP, never scale. Multiplying the verdict by the judged fraction did two opposite kinds of
-        # damage: round(STRONG * 1/6) == 0 manufactured a blocking hard fail whose own evidence read
-        # "no violations found", and concealment came out 1/n as costly as disclosure -- free once
-        # the set was large enough. Arithmetic must not invent a finding, in either direction.
-        #
-        # A verdict is what a check OBSERVED. Incomplete coverage cannot make that worse, and it
-        # must not let it stand as a clean bill: an exact claim cannot span scenarios nobody saw. So
-        # an observed failure survives intact and still blocks, while a pass over partial evidence
-        # caps at weak and cannot block. What it costs the tool is the cap plus counts_against_tool.
-        verdict = Verdict(min(int(verdict), int(Verdict.WEAK)))
         text = (
-            f"{text} [judged {judged}/{len(relevant)} scenario(s); "
-            f"{', '.join(sorted(unjudged))} produced nothing to judge, so no complete claim is "
-            f"possible here]"
+            f"{text} [observed on {judged}/{len(relevant)} scenario(s); "
+            f"{', '.join(sorted(unjudged))} produced nothing to judge]"
         )
 
     # Only a DETERMINISTIC check may assert a hard fail. Anything less exact -- a screen, or a
@@ -481,5 +577,8 @@ def _score_one(
         tier=tier,
         excerpt=excerpt,
         level_used=level_used if level_used is not None else min(p.level for p in usable),
+        scenarios_relevant=_ids(relevant),
+        scenarios_judged=tuple(sorted({p.scenario.id for p in relevant} - unjudged)),
+        scenarios_unjudged=tuple(sorted(unjudged)),
         counts_against_tool=bool(unjudged),
     )

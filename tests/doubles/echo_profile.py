@@ -13,11 +13,12 @@ and every outcome type.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from hai_eval.core.evidence import Evidence
+from hai_eval.core.evidence import Evidence, Pair
 from hai_eval.core.levels import Level
 from hai_eval.core.models import Scenario
 from hai_eval.core.outcomes import Assessed, Cause, Disagreement, Unmeasurable
@@ -92,11 +93,29 @@ def _banned_token(
     )
 
 
+def _partition(
+    evidence: Evidence[EchoArtifact], applies: Callable[[EchoScenario], bool]
+) -> tuple[tuple[Pair[EchoArtifact], ...], tuple[str, ...]]:
+    """Split the scenarios a check applies to into (usable, unobserved).
+
+    The probe-authoring contract this double demonstrates: **a check may never award a pass over
+    scenarios it could not look at.** Every structured probe here reports what it could not see, so
+    the engine can hold the verdict to the evidence behind it. Without this, removing information
+    RAISED the score -- a check with nothing to examine reported "clean".
+    """
+    applicable = tuple(p for p in evidence.pairs if applies(p.scenario))
+    usable = tuple(p for p in applicable if p.level >= Level.STRUCTURED)
+    unobserved = tuple(
+        sorted({p.scenario.id for p in applicable} - {p.scenario.id for p in usable})
+    )
+    return usable, unobserved
+
+
 def _cites_required(
     criterion: Criterion, evidence: Evidence[EchoArtifact]
 ) -> Assessed | Unmeasurable:
     """STRUCTURED: are the required fact ids in the citation set? An exact set operation."""
-    usable = [p for p in evidence.at_least(Level.STRUCTURED) if p.scenario.must_cite]
+    usable, unobserved = _partition(evidence, lambda s: bool(s.must_cite))
     if not usable:
         return Unmeasurable("no structured response carries citation expectations", Cause.TOOL)
     missing: list[str] = []
@@ -108,8 +127,12 @@ def _cites_required(
                 missing.append(f"{pair.scenario.id}: uncited {gap}")
                 break
     if missing:
-        return Assessed(Verdict.FAIL, "; ".join(missing))
-    return Assessed(Verdict.STRONG, f"every required fact cited across {len(usable)} scenario(s)")
+        return Assessed(Verdict.FAIL, "; ".join(missing), unobserved=unobserved)
+    return Assessed(
+        Verdict.STRONG,
+        f"every required fact cited across {len(usable)} scenario(s)",
+        unobserved=unobserved,
+    )
 
 
 def _no_out_of_scope_citation(
@@ -120,7 +143,7 @@ def _no_out_of_scope_citation(
     The shape that matters: a tool which correctly excluded a fact does not cite it, so this is
     decidable without ever inspecting prose.
     """
-    usable = [p for p in evidence.at_least(Level.STRUCTURED) if p.scenario.must_not_cite]
+    usable, unobserved = _partition(evidence, lambda s: bool(s.must_not_cite))
     if not usable:
         return Unmeasurable("no structured response carries exclusion expectations", Cause.TOOL)
     hits = []
@@ -132,8 +155,12 @@ def _no_out_of_scope_citation(
         if bad:
             hits.append(f"{pair.scenario.id}: cited out-of-scope {bad}")
     if hits:
-        return Assessed(Verdict.FAIL, "; ".join(hits))
-    return Assessed(Verdict.STRONG, f"nothing out-of-scope cited across {len(usable)} scenario(s)")
+        return Assessed(Verdict.FAIL, "; ".join(hits), unobserved=unobserved)
+    return Assessed(
+        Verdict.STRONG,
+        f"nothing out-of-scope cited across {len(usable)} scenario(s)",
+        unobserved=unobserved,
+    )
 
 
 def _fabricated_citation(
@@ -144,7 +171,7 @@ def _fabricated_citation(
     Open-world, which is the point of identifiers: it catches ANY invented citation rather than only
     the ones an author thought to forbid in advance.
     """
-    usable = evidence.at_least(Level.STRUCTURED)
+    usable, unobserved = _partition(evidence, lambda _s: True)
     if not usable:
         return Unmeasurable("no structured response to check citations against", Cause.TOOL)
     invented = []
@@ -154,8 +181,12 @@ def _fabricated_citation(
         if ghosts:
             invented.append(f"{pair.scenario.id}: cited nonexistent {ghosts}")
     if invented:
-        return Assessed(Verdict.FAIL, "; ".join(invented))
-    return Assessed(Verdict.STRONG, f"no invented citations across {len(usable)} scenario(s)")
+        return Assessed(Verdict.FAIL, "; ".join(invented), unobserved=unobserved)
+    return Assessed(
+        Verdict.STRONG,
+        f"no invented citations across {len(usable)} scenario(s)",
+        unobserved=unobserved,
+    )
 
 
 def _declines_when_expected(
@@ -172,7 +203,7 @@ def _declines_when_expected(
     the word "Declining". A tool that says it declined while citing the facts it reasoned from has
     contradicted itself in a way that needs no reading.
     """
-    usable = evidence.at_least(Level.STRUCTURED)
+    usable, unobserved = _partition(evidence, lambda _s: True)
     if not usable:
         return Unmeasurable("no structured response to read a decline flag from", Cause.TOOL)
 
@@ -194,13 +225,32 @@ def _declines_when_expected(
 
     if unexpected and len(declined_wrong) == len(unexpected):
         return Assessed(
-            Verdict.FAIL, "declined every scenario that wanted an answer -- not a degradation path"
+            Verdict.FAIL,
+            "declined every scenario that wanted an answer -- not a degradation path",
+            unobserved=unobserved,
         )
     if declined_wrong:
-        return Assessed(Verdict.WEAK, f"declined where an answer was wanted: {declined_wrong}")
+        return Assessed(
+            Verdict.WEAK,
+            f"declined where an answer was wanted: {declined_wrong}",
+            unobserved=unobserved,
+        )
     if expected and not declined_right:
-        return Assessed(Verdict.WEAK, f"did not decline on {[p.scenario.id for p in expected]}")
-    return Assessed(Verdict.STRONG, "declined exactly where expected")
+        return Assessed(
+            Verdict.WEAK,
+            f"did not decline on {[p.scenario.id for p in expected]}",
+            unobserved=unobserved,
+        )
+    if not expected:
+        # Nothing in view expected a deferral, so appropriateness was never tested. Reporting STRONG
+        # here is how removing information used to RAISE the score.
+        return Assessed(
+            Verdict.STRONG,
+            "no scenario in view expected a deferral, and none was wrongly given",
+            unobserved=unobserved
+            + tuple(p.scenario.id for p in evidence.pairs if p.scenario.expects_decline),
+        )
+    return Assessed(Verdict.STRONG, "declined exactly where expected", unobserved=unobserved)
 
 
 ECHO_PROFILE = Profile(
