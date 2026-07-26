@@ -31,6 +31,16 @@ class Fact(BaseModel):
 
     id: str = Field(pattern=r"^[A-Za-z0-9][\w-]{0,15}$")
     text: str = Field(min_length=1)
+    cue: str = ""
+    """A short literal by which this fact might be recognised in free text.
+
+    For level-0 screening only, and it is the honest expression of what that level can do: with no
+    identifiers to work with, recognising a fact in prose means matching a string, and a string
+    match cannot tell a paraphrase from an omission. Optional, because a fact nobody needs to spot
+    in prose does not need one, and an empty cue is treated as "cannot be screened for" rather than
+    as "never appears" -- the difference between those two was how an absence used to read as a
+    pass.
+    """
 
 
 class Scenario(BaseModel):

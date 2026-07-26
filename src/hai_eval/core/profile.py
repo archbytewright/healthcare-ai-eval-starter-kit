@@ -43,6 +43,14 @@ class ProbeSpec:
 
     fn: Probe
     claims: Mapping[Level, ProbeTier]
+    summary: str = ""
+    """One line naming what this check asks, for the rendered claim table.
+
+    Lives beside the claims it describes so the documentation is generated from the same object the
+    engine consults. Prose written *about* a table drifts from it -- the public README asserted a
+    verdict its own generated reports had stopped issuing, and survived a regeneration because it
+    was hand-written rather than derived.
+    """
     relevant: Callable[[Any], bool] = lambda _scenario: True
     """Which scenarios this check applies to at all.
 
