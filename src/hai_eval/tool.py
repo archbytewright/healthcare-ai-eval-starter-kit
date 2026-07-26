@@ -181,7 +181,8 @@ class MockDecisionSupportTool:
 
     The adapter builds the system + user prompt, calls the model, and maps the raw
     completion onto :class:`ToolOutput`, including detecting whether an embedded
-    injection took effect (the canary appearing in the recommendation).
+    injected canary string appears in the output -- which is an observation, not a finding that
+    the injection was followed. The harness re-derives it and reports any disagreement.
 
     Pass ``strip_tags=True`` for a real model so it receives the untagged case
     (natural clinical prose); the ``[TAG]`` markers exist only so the deterministic

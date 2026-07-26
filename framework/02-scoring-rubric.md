@@ -128,7 +128,8 @@ why.
 
 ## Why so much is "not assessed"
 
-Roughly half the shipped rubric is assessed by document and governance review,
+Six of the eleven criteria in the shipped rubric, carrying 60% of the declared weight, are assessed
+by document and governance review,
 not by running the model. This is accurate to the domain: oversight checkpoints,
 monitoring plans, and transparency artifacts are properties of the deployment and
 the vendor, not of the model's text output. A harness that pretended to score

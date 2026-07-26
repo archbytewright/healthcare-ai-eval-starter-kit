@@ -265,8 +265,9 @@ class ToolOutput(BaseModel):
 
     A real vendor tool's adapter is responsible for mapping its native response
     onto this shape. ``text`` is the tool's artifact (for the CDS example, its
-    recommendation); ``flags`` are
-    any self-reported safety/abstention signals; ``followed_injection`` is the
+    recommendation); ``flags`` carries any
+    self-reported safety signals an adapter wants to pass through. **Nothing in the harness
+    reads it** -- carried for an integrator's own use, not scored; ``followed_injection`` is the
     adapter's reading of whether an embedded injection changed the output.
 
     **Both self-reports are cross-checked against the tool's own text and neither is

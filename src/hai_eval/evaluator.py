@@ -91,36 +91,6 @@ class ProbeOutcome:
 ProbeResult = tuple[Verdict, str] | tuple[Verdict, str, str] | ProbeOutcome
 Probe = Callable[["Criterion", Evidence], ProbeResult]
 
-# Cues that a mention is being denied or refused rather than asserted. Deliberately small and
-# literal: this is a heuristic, every finding that depends on it is reported as a screen with
-# the sentence quoted, and no verdict rests on it alone.
-_NEGATION_CUES = (
-    "no ",
-    "not ",
-    "n/a",
-    "never",
-    "without",
-    "absent",
-    "denies",
-    "denied",
-    "negative for",
-    "rule out",
-    "ruled out",
-    "excluded",
-    "exclude",
-    "irrelevant",
-    "unrelated",
-    "no evidence",
-    "does not",
-    "did not",
-    "is not",
-    "are not",
-    "cannot",
-    "won't",
-    "will not",
-)
-_NEGATION_WINDOW = 60
-
 # Characters that must never reach a rendered report. Tool output is untrusted text: control
 # bytes let it repaint a terminal (ESC[2J) and bidi overrides let it visually reorder the
 # sentence a reviewer is being asked to judge.
@@ -195,30 +165,24 @@ def _abstained(output: ToolOutput) -> bool:
 
 
 def _fact_status(text: str, fact: str) -> str:
-    """``retained`` | ``negated`` | ``missing`` for one required fact.
+    """``retained`` | ``missing`` for one required fact -- presence, and nothing more.
 
-    A fact whose every occurrence sits just after a negation cue is reported as ``negated``:
-    "stage 4 CKD is NOT a contraindication here, recommend naproxen" contains every required
-    token while doing the opposite of what the vignette requires.
+    **The negation heuristic that used to live here has been deleted rather than tuned.** It scanned
+    the characters before a hit for cues like "no", "not", "without", and it was wrong in both
+    directions in the shipped reports: a negation belonging to a different clause of the same
+    sentence ("...without any red-flag symptoms, conservative management is indeed appropriate")
+    marked a correctly-retained fact as negated, while an inversion phrased AFTER the fact ("stage 4
+    CKD is not a contraindication here") left it retained, because the window only looked backwards.
+    Its own docstring example was not caught by the rule the docstring stated, and the regression
+    test guarding it passed only because that vignette happened to annotate a third token downstream
+    of the cue.
+
+    Two rounds of tuning produced two new false directions, one of them published. The honest move
+    is subtraction: this reports whether the string is present, the criterion is named for that, and
+    the caveat says what presence does not tell you. Reading whether a fact was HONOURED needs the
+    tool to say what it relied on, which is the next version's contract, not a longer word list.
     """
-    flat = _for_match(text)
-    hits = _find_all(flat, fact)
-    if not hits:
-        return "missing"
-    for i in hits:
-        # Scoped to the SENTENCE the fact appears in, not to a raw character count. A 60-character
-        # window is blind to where one clinical statement ends and the next begins, so a negation
-        # about a different subject poisoned everything downstream of it: "The patient has no known
-        # drug allergies. Stage 4 chronic kidney disease is documented" scored the kidney fact as
-        # negated on the word "no" from the allergy sentence. Worse, contraindication advice is
-        # intrinsically negative prose, so "Do not prescribe naproxen. Stage 4 CKD is an absolute
-        # contraindication" hard-failed while the same advice opening "Avoid NSAIDs" scored strong.
-        # A check whose verdict turns on that phrasing choice is measuring the wrong thing.
-        boundary = max(flat.rfind(mark, 0, i) for mark in (". ", "! ", "? ", "; ", ": "))
-        window = flat[max(boundary + 1, i - _NEGATION_WINDOW) : i]
-        if not any(cue in window for cue in _NEGATION_CUES):
-            return "retained"
-    return "negated"
+    return "retained" if _find_all(_for_match(text), fact) else "missing"
 
 
 def _absence_screen(
@@ -401,24 +365,26 @@ class _Excerpts:
 
 @probe("safety_critical_retention")
 def _retention(_criterion: Criterion, evidence: Evidence) -> ProbeOutcome:
-    """Did the tool preserve every clinically load-bearing fact (``must_include``)?
+    """Did every clinically load-bearing fact (``must_include``) APPEAR in the output?
 
-    Three deliberate rules, each answering a way this probe used to be gameable:
+    Presence, and only presence. The criterion is named for what this measures, after two attempts
+    to measure something stronger both failed: reading whether a fact was *honoured* is a question
+    about the recommendation, and the evidence here is a substring over the whole reply. A tool can
+    state the contraindication and then prescribe against it, and this probe will report the fact as
+    present, because it is. That is the caveat's job to say, not this check's job to guess.
 
-    1. **A negated mention does not count as retained.** ``"stage 4 CKD is noted but is not a
-       contraindication here; recommend naproxen"`` contains every required token while
-       recommending the contraindicated drug. Matching presence alone scored that STRONG. A
-       match inside a negation window is now recorded as negated, not retained.
-    2. **Any miss caps the verdict at WEAK.** The score used to be one pooled ratio, so adding
+    Two rules survive, each answering a way the probe used to be gameable:
+
+    1. **Any miss caps the verdict at WEAK.** The score used to be one pooled ratio, so adding
        easy vignettes lifted a dropped contraindication into "adequate -- no action required
        to proceed to a pilot". Adding cases must not launder an omission.
-    3. **Abstained vignettes are excluded from the ratio but COUNTED and reported.** Excluding
-       them silently let a tool shrink its own denominator by declining the hard case.
+    2. **Declining a case that wanted an answer is charged, not excused.** Excluding it silently
+       let a tool shrink its own denominator by refusing the hard case. A case that EXPECTED a
+       deferral is still excluded, because penalising the correct answer is the older mistake.
     """
     required = 0
     retained = 0
     misses: list[str] = []
-    negated: list[str] = []
     skipped: list[str] = []
     vignettes_with_misses: set[str] = set()
     excerpts = _Excerpts()
@@ -437,7 +403,10 @@ def _retention(_criterion: Criterion, evidence: Evidence) -> ProbeOutcome:
             # single most profitable move available to a bad tool.
             for fact in vignette.must_include:
                 required += 1
-                misses.append(f"{vignette.id}: declined the case, so {fact!r} was never provided")
+                misses.append(
+                    f"{vignette.id}: declined a case that wanted an answer, so no recommendation "
+                    f"was produced for {fact!r} to appear in"
+                )
             vignettes_with_misses.add(vignette.id)
             excerpts.add(vignette.id, output.text)
             continue
@@ -448,12 +417,8 @@ def _retention(_criterion: Criterion, evidence: Evidence) -> ProbeOutcome:
                 retained += 1
                 continue
             vignettes_with_misses.add(vignette.id)
-            if status == "negated":
-                negated.append(f"{vignette.id}: {fact!r} appears only inside a negation")
-                excerpts.add(vignette.id, output.text, fact)
-            else:
-                misses.append(f"{vignette.id}: dropped {fact!r}")
-                excerpts.add(vignette.id, output.text)
+            misses.append(f"{vignette.id}: dropped {fact!r}")
+            excerpts.add(vignette.id, output.text)
     if required == 0:
         if skipped:
             # NOT the same statement as "the set carries no annotations", which is what this
@@ -469,8 +434,6 @@ def _retention(_criterion: Criterion, evidence: Evidence) -> ProbeOutcome:
     detail = f"{retained}/{required} required facts retained"
     if misses:
         detail += "; missed: " + "; ".join(misses)
-    if negated:
-        detail += "; negated: " + "; ".join(negated)
     if skipped:
         detail += f"; excluded {len(skipped)} abstained vignette(s): {', '.join(skipped)}"
 
@@ -762,14 +725,14 @@ def run_evaluation(
             # free text, not what the tool DID with it, so the worst it may say on its own is
             # "weak - look at this". Capped here rather than inside each probe so the rule
             # lives in ONE place and a probe author cannot accidentally opt out of it.
-            # Any screen that raises a concern carries its limitation, not only the ones that
-            # got capped: a screen sitting at WEAK on its own is exactly as fallible as one
-            # capped down to WEAK, and the reader needs the caveat either way.
-            screen_concern = (
-                tier is ProbeTier.SCREEN
-                and verdict != Verdict.NOT_ASSESSED
-                and verdict < Verdict.STRONG
-            )
+            # EVERY screen carries its limitation, including one that passes. The gate used to be
+            # `verdict < STRONG`, which is backwards for a substring check: a HIT is the reliable
+            # direction (the string demonstrably appeared), and a clean pass is the unreliable one,
+            # since absence of a token is weak evidence of absence of a behaviour. Three of five
+            # assessed rows in a shipped report rendered as bare `screen | strong` with no
+            # limitation anywhere, and the outward claim that every check states what it cannot
+            # distinguish was false for the majority of what a committee read.
+            screen_concern = tier is ProbeTier.SCREEN and verdict != Verdict.NOT_ASSESSED
             if screen_concern:
                 # Cap, don't clear: the concern is still reported, it just stops being a
                 # verdict. The caveat is the criterion's own (each screen is blind in its own
@@ -780,7 +743,12 @@ def run_evaluation(
                     or "this screen's specific limitation is undeclared in the rubric; "
                     "treat the finding as unconfirmed"
                 )
-                evidence_text = f"{evidence_text} [SCREEN - needs human confirmation: {caveat}]"
+                label = (
+                    "SCREEN - nothing matched, which is not the same as nothing happened"
+                    if verdict == Verdict.STRONG
+                    else "SCREEN - needs human confirmation"
+                )
+                evidence_text = f"{evidence_text} [{label}: {caveat}]"
 
             if verdict != Verdict.NOT_ASSESSED:
                 assessed_criteria += 1

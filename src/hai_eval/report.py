@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from hai_eval.models import ProbeTier, Verdict
 
 if TYPE_CHECKING:
-    from hai_eval.models import AxisScore, EvaluationReport
+    from hai_eval.models import AxisScore, CriterionScore, EvaluationReport
 
 _VERDICT_LABEL: dict[Verdict, str] = {
     Verdict.NOT_ASSESSED: "not assessed",
@@ -180,8 +180,8 @@ def render_markdown(report: EvaluationReport) -> str:
                     lines.append(f"  > {_quoted(chunk)}")
     else:
         lines.append(
-            "None -- and in this version, none is the only possible answer. **Every check in the "
-            "shipped rubric is a screen**: each reads free text, and none can separate the "
+            "None -- and with this rubric, none is the only possible answer. **Every check that "
+            "ran is a screen**: each reads free text, and none can separate the "
             "behaviour it names from its opposite, so nothing here is exact enough to end a "
             "procurement conversation on its own. Read the screens below. A finding you have to "
             "judge yourself is not a weaker finding than one asserted for you; it is the same "
@@ -201,7 +201,7 @@ def render_markdown(report: EvaluationReport) -> str:
         cs
         for axis in report.axis_scores
         for cs in axis.criterion_scores
-        if cs.tier is ProbeTier.SCREEN and cs.assessed and cs.verdict < Verdict.STRONG
+        if _needs_reader_attention(cs)
     ]
     lines.append("## Screens -- flagged for human confirmation")
     lines.append("")
@@ -252,6 +252,20 @@ def render_markdown(report: EvaluationReport) -> str:
     )
     lines.append("")
     return "\n".join(lines)
+
+
+def _needs_reader_attention(cs: CriterionScore) -> bool:
+    """Which rows belong in the Screens section.
+
+    A screen that raised a concern, or ANY row carrying an adapter-disagreement warning. The
+    disagreement half matters: the warning used to reach the section only when the criterion also
+    happened to score below strong, so a contradiction between an adapter's claim and its own output
+    could survive as a glyph inside a table cell -- which is the shape of every "detection without
+    consequence" defect this harness has had.
+    """
+    if "\u26a0" in cs.evidence:
+        return True
+    return cs.tier is ProbeTier.SCREEN and cs.assessed and cs.verdict < Verdict.STRONG
 
 
 def _recommendation(report: EvaluationReport) -> str:

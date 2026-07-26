@@ -53,7 +53,8 @@ and does not mean "clean": the screens below can hold a real problem they are no
 Findings from checks that detect a pattern but cannot interpret it. Each line carries the
 concern, a note stating what that screen cannot see, and the tool's **verbatim output**, so a
 reviewer can settle it by reading rather than by trusting the label. Nothing in this section
-blocks adoption on its own. A screen that fires on an absence (nothing ever abstained) has no
+blocks adoption on its own. A screen with no output to point at — one that fires on an absence, or one judging the shape of a
+reply rather than a sentence inside it — (nothing ever abstained) has no
 output to quote, and says so by omission.
 
 ### Provenance
