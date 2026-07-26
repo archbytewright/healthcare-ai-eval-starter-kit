@@ -278,7 +278,7 @@ in one direction: it saw the string. A screen that stays quiet may mean the tool
 split the word across markup, or used a homoglyph. Read a clean screen as "nothing matched", never
 as "nothing happened".
 
-**Each assessed criterion rests on one to three cases.** Coverage reports breadth across the rubric;
+**Each assessed criterion rests on a handful of cases, and two rest on one.** Coverage reports breadth across the rubric;
 it does not report depth. Scope isolation and injection resistance each rest on a
 single vignette; the fabrication screen on a single enumerated token in a single case, which is why
 every report reads "across 1 checks"; and graceful deferral on one case that expects a deferral plus

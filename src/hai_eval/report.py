@@ -91,8 +91,8 @@ def _coverage_lines(report: EvaluationReport) -> list[str]:
         f"- **Coverage:** scored {cov.criteria_assessed} of {cov.criteria_total} criteria, "
         f"{cov.weight_assessed:g} of {cov.weight_total:g} axis weight "
         f"({cov.weight_fraction:.0%}); the rest is reported as *not assessed* -- the reasons "
-        f"differ, so read the Evidence column rather than assuming document review",
-        f"- **Cases:** {cov.cases_total} synthetic vignette(s); "
+        f"may differ, so read the Evidence column rather than assuming document review",
+        f"- **Cases:** {cov.cases_total} vignette(s); "
         f"{cov.cases_answered} answered, {len(cov.cases_abstained)} declined",
     ]
     if cov.cases_abstained:
@@ -211,8 +211,10 @@ def render_markdown(report: EvaluationReport) -> str:
             )
         else:
             lines.append(
-                "None. No check that ran produced a hard fail on an axis the rubric marks "
-                "blocking-eligible. Read the screens below before reading that as clean."
+                "None. No check that ran produced a hard fail it was exact enough to act on: "
+                "blocking needs a *deterministic* criterion on an axis the rubric marks "
+                "blocking-eligible. Screens can and do report hard failures, capped to *weak* "
+                "and listed below -- read them before reading this as clean."
             )
     lines.append("")
 

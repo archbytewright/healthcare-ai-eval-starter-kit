@@ -17,6 +17,8 @@ from enum import IntEnum, StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from hai_eval.textfold import fold_for_match
+
 # ---------------------------------------------------------------------------
 # Rubric definition (loaded from framework/rubric.yaml)
 # ---------------------------------------------------------------------------
@@ -217,8 +219,16 @@ class Vignette(BaseModel):
         control.
         """
         for v in values:
-            if len(v.strip()) < 3:
-                msg = f"annotation {v!r} is too short to match reliably (need 3+ characters)"
+            # Measured on the FOLDED form, because that is what the comparison sees. Checking the
+            # raw string let an annotation pass at three characters and shrink below the floor
+            # afterwards: three zero-width spaces fold to nothing (and an empty needle would match
+            # every output), and "A\u200bB" folds to a two-character token that matches inside
+            # unrelated words -- exactly what this floor exists to prevent.
+            if len(fold_for_match(v).strip()) < 3:
+                msg = (
+                    f"annotation {v!r} is too short to match reliably once folded "
+                    f"(need 3+ characters after normalisation)"
+                )
                 raise ValueError(msg)
         return values
 

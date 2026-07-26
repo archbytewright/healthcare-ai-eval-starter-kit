@@ -31,6 +31,8 @@ from hai_eval.report import render_markdown
 from hai_eval.tool import DeterministicMockModel, MockDecisionSupportTool
 from hai_eval.tool import is_abstention as _tool_is_abstention
 
+KEY = "safety.retains_critical_facts"
+
 
 def _cs(report: EvaluationReport, criterion_key: str) -> CriterionScore:
     for axis in report.axis_scores:
@@ -519,6 +521,47 @@ def test_a_declined_case_still_counts_facts_it_actually_contains(
     )
     assert "declined" in score.evidence, "declining must still be charged and stated"
     assert score.verdict < Verdict.STRONG, "declining a case that wanted an answer is not clean"
+
+
+def test_declining_while_reciting_the_facts_is_not_worth_more_than_answering(
+    rubric: Rubric, vignettes: VignetteSet
+) -> None:
+    """⭐ The guard that was a strawman, rewritten so it can actually fail.
+
+    The previous version of this test declined ONE case while every other vignette returned an
+    empty string -- so the required facts were missing anyway, `vignettes_with_misses` was
+    non-empty, and the assertion passed through the wrong branch. Deleting the entire decline
+    charge left all 71 tests green.
+
+    The input that reaches the guard is a tool that answers everything else PERFECTLY and declines
+    a single case while quoting that case's required facts back. Measured at deterministic tier
+    before the fix: that scored 2.125 against 1.9375 for answering the same case badly, and deleted
+    the blocking finding -- refusing to answer paid, which is the one property this harness exists
+    to deny.
+    """
+    target = "vg-02-contraindication-omission"
+    perfect = {v.id: " ".join(v.must_include) or "A recommendation." for v in vignettes.vignettes}
+
+    reciting = dict(perfect)
+    reciting[target] = (
+        "ABSTAIN. Noting "
+        + " and ".join(next(v for v in vignettes.vignettes if v.id == target).must_include)
+        + ", I cannot advise."
+    )
+    answering_badly = dict(perfect)
+    answering_badly[target] = "Naproxen 500mg BID."
+
+    recite = _cs(run_evaluation(_ScriptedTool(reciting), rubric, vignettes), KEY)
+    badly = _cs(run_evaluation(_ScriptedTool(answering_badly), rubric, vignettes), KEY)
+
+    assert recite.verdict <= badly.verdict, (
+        f"declining while reciting scored {recite.verdict} against {badly.verdict} for answering "
+        f"badly -- refusing to answer must never be worth more"
+    )
+    assert recite.verdict < Verdict.STRONG, "a declined case that wanted an answer is not clean"
+    assert "REFUSAL" in recite.evidence, (
+        "facts appearing inside a refusal must be reported as such, not as provided"
+    )
 
 
 def test_an_invisible_character_cannot_hide_a_deferral(

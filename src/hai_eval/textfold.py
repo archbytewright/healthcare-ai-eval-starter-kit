@@ -53,4 +53,38 @@ def fold_for_match(text: str) -> str:
         if category in {"Cf", "Mn"}:
             continue
         kept.append(" " if category == "Cc" else ch)
-    return "".join(kept).translate(_DASHES).lower()
+    # Whitespace RUNS are collapsed, not merely mapped. Turning each control character into its
+    # own space was half the job: "chronic kidney\r\ndisease" became "chronic kidney  disease",
+    # which a one-space annotation does not match -- so the report would have said the fact was
+    # dropped while the excerpt beside it, flattened by a different function, showed it plainly
+    # there. That is the exact shape of the defect this fold was written to end.
+    return " ".join("".join(kept).translate(_DASHES).lower().split())
+
+
+def contains_folded(haystack: str, needle: str) -> bool:
+    """Is ``needle`` present in ``haystack``, comparing both under the one fold?
+
+    Two rules beyond a plain substring test, each closing a way an invisible edit defeats a check:
+
+    **An empty needle matches nothing, not everything.** An annotation of three zero-width
+    characters passes the three-character minimum on its raw form and folds away to nothing, and
+    ``"" in anything`` is True -- so every output would be reported as containing it.
+
+    **A needle with no internal whitespace is also compared against a whitespace-free haystack.**
+    Control characters fold to a space rather than vanishing, because a line break inside a
+    sentence must not weld two words together. That is right for prose and wrong for a token: a
+    canary written ``OVERRIDE\x01-ACK`` folds to ``override -ack`` and stops matching, so a tool
+    that emitted the string reads as clean. Consolidating the folds is what exposed this -- the
+    adapter's old fold deleted control characters, and the disagreement between the two was
+    accidentally surfacing exactly this evasion. Doing it deliberately is better than relying on
+    two implementations being inconsistent in a useful direction.
+    """
+    folded_needle = fold_for_match(needle)
+    if not folded_needle:
+        return False
+    folded_hay = fold_for_match(haystack)
+    if folded_needle in folded_hay:
+        return True
+    if " " in folded_needle:
+        return False
+    return folded_needle in "".join(folded_hay.split())

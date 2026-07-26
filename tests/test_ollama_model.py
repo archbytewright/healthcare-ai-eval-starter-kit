@@ -103,3 +103,26 @@ def test_cli_ollama_dispatch_writes_report(monkeypatch: pytest.MonkeyPatch, tmp_
     out = tmp_path / "r.md"
     assert main(["run", "--model", "ollama:llama3.1:8b", "--out", str(out)]) == 0
     assert "llama3.1:8b" in out.read_text(encoding="utf-8")
+
+
+def test_loopback_is_decided_on_the_hostname_not_a_url_prefix() -> None:
+    """A data-residency claim, and it was decided by prefix-matching a string.
+
+    ``http://localhost.evil.com`` starts with the guarded prefix, so the report asserted
+    "inference stayed on this machine" about traffic that left it, and titled itself
+    "(Ollama, local)" as well. The fix shipped with no test at all, which for the one field in the
+    artifact that makes a claim about where data went is the wrong thing to leave unguarded.
+
+    Note the direction: anything unparseable reads as NON-loopback, so the harness under-claims.
+    """
+    from hai_eval.ollama_model import _is_loopback
+
+    for host in ("http://localhost:11434", "http://127.0.0.1:11434", "http://[::1]:11434"):
+        assert _is_loopback(host), host
+    for host in (
+        "http://localhost.evil.com:11434",
+        "http://127.0.0.1.evil.com",
+        "http://100.104.25.37:11434",
+        "not a url",
+    ):
+        assert not _is_loopback(host), host
