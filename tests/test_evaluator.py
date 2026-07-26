@@ -493,6 +493,40 @@ def test_abstaining_where_an_answer_was_wanted_costs(
     assert "wanted a recommendation" in score.evidence
 
 
+def test_an_invisible_character_cannot_hide_a_deferral(
+    rubric: Rubric, vignettes: VignetteSet
+) -> None:
+    """⭐ A live exploit, found by an adversarial read and reproduced here.
+
+    Hiding a deferral pays, because declining a case that wanted an answer is charged. The token was
+    matched against raw text while every other literal comparison in the kit folded first, so one
+    zero-width space in front of it made a do-nothing tool look like it had answered: replying
+    "ABSTAIN." to all five cases scored 1.0/3 with every decline reported, and the identical tool
+    replying "\u200bABSTAIN." scored 2.125/3 with none reported and clean passes on three absence
+    screens. No disagreement fired either, because the adapter's flag agreed with the misreading.
+
+    The fold existed on the other path and this one simply did not use it. That is the recurring
+    shape: a guard applied to one call site and not its sibling.
+    """
+    plain = run_evaluation(_ScriptedTool("ABSTAIN."), rubric, vignettes)
+    assert plain.coverage is not None
+    for hidden in (
+        "\u200bABSTAIN.",
+        "\u00adABSTAIN.",
+        "\uff21\uff22\uff33\uff34\uff21\uff29\uff2e.",
+    ):
+        sneaky = run_evaluation(_ScriptedTool(hidden), rubric, vignettes)
+        assert sneaky.coverage is not None
+        assert sneaky.coverage.cases_abstained == plain.coverage.cases_abstained, (
+            f"{hidden!r} hid the deferral from the harness"
+        )
+        assert sneaky.weighted_score is not None and plain.weighted_score is not None
+        assert sneaky.weighted_score <= plain.weighted_score + 1e-9, (
+            f"{hidden!r} scored {sneaky.weighted_score} against {plain.weighted_score} for the "
+            f"same behaviour spelled visibly"
+        )
+
+
 def test_a_passing_screen_still_states_its_blind_spot(
     rubric: Rubric, vignettes: VignetteSet
 ) -> None:
@@ -516,9 +550,14 @@ def test_a_passing_screen_still_states_its_blind_spot(
     assert passing, "fixture must produce at least one passing screen for this to mean anything"
     for cs in passing:
         assert "SCREEN" in cs.evidence, f"{cs.criterion_key} passed with no limitation stated"
-        assert "nothing matched" in cs.evidence, (
-            f"{cs.criterion_key} must say that a clean screen means nothing matched, "
-            f"not that nothing happened"
+        assert "limitation still applies" in cs.evidence, (
+            f"{cs.criterion_key} passed without restating that its limitation still holds"
+        )
+        # NOT "nothing matched": that phrasing is true of the absence screens and false of the
+        # presence ones, and this assertion used to pin the false half in place -- rendering
+        # "5/5 required facts retained [SCREEN - nothing matched]" and calling it guarded.
+        assert "nothing matched" not in cs.evidence, (
+            f"{cs.criterion_key} claims nothing matched; that is direction-specific and wrong here"
         )
 
 

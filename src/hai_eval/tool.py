@@ -6,7 +6,8 @@ tool is integrated by writing an adapter that implements this protocol over the
 vendor's API; nothing else in the harness changes. The harness is tool-type
 agnostic -- the worked example happens to evaluate a clinical decision support (CDS)
 tool, the use case CHAI publishes a testing-and-evaluation framework for and the one
-the FDA's 2026 Clinical Decision Support Software guidance addresses.
+the FDA's clinical decision support software guidance (check the current version -- see
+    ``framework/04-governance-map.md`` § Sources) addresses.
 
 For the worked example the kit ships a *deterministic* mock so the example runs
 offline, byte-reproducibly, and without model weights or network calls:
@@ -28,6 +29,7 @@ argument, not a rewrite.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from hai_eval.models import ToolOutput
@@ -157,8 +159,20 @@ def is_abstention(raw: str) -> bool:
     Public because the harness cross-checks it against the adapter's self-reported
     ``abstained`` flag: for a vendor integration the adapter is the vendor's code, and a
     verdict the evaluated party supplies is not evidence.
+
+    ⭐ **Folded before matching, and this was a live exploit.** The token used to be matched against
+    raw text while every other literal comparison in the kit normalised first. A single zero-width
+    space in front of it hid the deferral from the harness, and hiding a deferral pays: a
+    do-nothing tool replying "ABSTAIN." to all five cases scored 1.0/3 with every decline reported,
+    and the same tool replying "\u200bABSTAIN." scored **2.125/3 with no declines reported at
+    all**, collecting clean passes on three absence screens. No disagreement warning fired either,
+    because the adapter's flag agreed with the harness's misreading.
+
+    The lesson is the one already written on ``_for_match``: an invisible character defeats a check
+    that reads bytes a human never sees, and the fix is to ask what a character IS rather than to
+    remember which ones to strip. That fold existed; this path simply did not use it.
     """
-    return bool(_ABSTAIN_LEAD.match(raw.strip()))
+    return bool(_ABSTAIN_LEAD.match(_fold_for_token_match(raw).strip()))
 
 
 # Kept as a private alias so existing call sites and tests keep working.
@@ -169,6 +183,16 @@ _is_abstention = is_abstention
 # block adoption defeated by a character nobody can see. Everything else in the harness already
 # normalised its text; this was the one that did not.
 _INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\x00-\x08\x0b-\x1f\x7f]")
+
+
+def _fold_for_token_match(text: str) -> str:
+    """Compatibility-normalise and drop format/combining marks, for leading-token comparison.
+
+    Deliberately the same question ``hai_eval.evaluator._for_match`` asks: what IS this character,
+    rather than which invisible ones did someone remember to list.
+    """
+    folded = unicodedata.normalize("NFKC", text)
+    return "".join(ch for ch in folded if unicodedata.category(ch) not in {"Cf", "Mn"})
 
 
 def _for_matching(text: str) -> str:

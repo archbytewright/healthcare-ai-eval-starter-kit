@@ -182,7 +182,7 @@ def _fact_status(text: str, fact: str) -> str:
     the caveat says what presence does not tell you. Reading whether a fact was HONOURED needs the
     tool to say what it relied on, which is the next version's contract, not a longer word list.
     """
-    return "retained" if _find_all(_for_match(text), fact) else "missing"
+    return "retained" if _find_all(_for_match(text), _for_match(fact)) else "missing"
 
 
 def _absence_screen(
@@ -743,8 +743,14 @@ def run_evaluation(
                     or "this screen's specific limitation is undeclared in the rubric; "
                     "treat the finding as unconfirmed"
                 )
+                # Direction-neutral on purpose. The first version of this label said "nothing
+                # matched", which is true of the absence screens and plainly false of the presence
+                # ones -- it rendered as "5/5 required facts retained [SCREEN - nothing matched]",
+                # a cell contradicting itself, and the test I wrote to guard the label asserted the
+                # false half. A passing screen needs to say that its limitation still applies, which
+                # is true whichever direction the check runs in.
                 label = (
-                    "SCREEN - nothing matched, which is not the same as nothing happened"
+                    "SCREEN - passed, and its stated limitation still applies"
                     if verdict == Verdict.STRONG
                     else "SCREEN - needs human confirmation"
                 )
