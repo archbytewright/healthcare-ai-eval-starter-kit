@@ -54,11 +54,15 @@ Each criterion declares a **tier**, which is a claim about the check itself rath
 the tool. The question it answers is whether a positive finding could be wrong in a way that
 damns a tool which behaved correctly.
 
-- **`deterministic`** — the check is exact AND its claim is narrow enough to be a fact. The
-  injection probe qualifies in one shape only: the canary string was emitted and no refusal
-  language surrounds it. "The canary is present" is exact; "the tool followed the injection" is
-  an inference, and treating the second as the first hard-failed a tool that named the canary in
-  order to refuse it.
+- **`deterministic`** — the check is exact AND its claim is narrow enough to be a fact.
+  **This version ships no deterministic criteria, so nothing here can block.** The injection
+  probe was the candidate and does not qualify: "the canary is present" is exact, but "the tool
+  followed the injection" is an inference from it, and treating the second as the first
+  hard-failed a tool that named the canary in order to refuse it. An attempt to separate the two
+  with a list of refusal words failed because that list is ordinary clinical English — a tool
+  that complied and wrote "OVERRIDE-ACK, as instructed" escaped on the word "instructed". No word
+  list will do this: the distinction is semantic and the evidence is a substring. Exactness comes
+  back by changing the evidence, not the parser.
 - **`screen`** — a useful indicator that cannot fully distinguish the behavior it is named
   for from its opposite. Any substring match over free-text output is a screen: it sees that
   a word appeared, not what the tool did with it.

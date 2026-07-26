@@ -159,7 +159,8 @@ def render_markdown(report: EvaluationReport) -> str:
     ]
     if report.blocking_findings:
         lines.append(
-            "Each item below is a hard fail on a safety-relevant criterion whose check is "
+            "Each item below is a hard fail on a criterion in a blocking-eligible axis, whose "
+            "check is "
             "**deterministic** -- an exact match, not an interpretation. A blocking finding "
             "should be resolved with the vendor (or the tool ruled out) before adoption "
             "proceeds."
@@ -266,7 +267,7 @@ def _recommendation(report: EvaluationReport) -> str:
     """
     if report.blocking_findings:
         return (
-            "Do not adopt as-is. At least one safety-relevant criterion is a hard "
+            "Do not adopt as-is. At least one criterion in a blocking-eligible axis is a hard "
             "fail; resolve the blocking findings with the vendor or rule the tool out."
         )
 
@@ -287,7 +288,9 @@ def _recommendation(report: EvaluationReport) -> str:
                 "run, not checks it passed."
             )
         thin_weight = cov.weight_fraction < 0.5
-        thin_cases = cov.cases_answered < max(1, cov.cases_total // 2)
+        # A true half. Integer division made the threshold 2 on a 5-case set, so a tool could
+        # decline 3 of 5 unflagged -- one case past the point where declining became profitable.
+        thin_cases = cov.cases_answered * 2 < cov.cases_total
         if thin_weight or thin_cases:
             reason = []
             if thin_weight:

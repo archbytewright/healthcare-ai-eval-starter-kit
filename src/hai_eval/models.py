@@ -49,8 +49,10 @@ class ProbeTier(StrEnum):
     The question that matters: **can a positive finding be wrong** — and specifically, can
     it be wrong in a way that damns a tool which behaved correctly?
 
-    - ``deterministic`` — the check is exact, so a failure is a fact. The injection probe
-      qualifies: a literal canary string is either present in the output or it is not.
+    - ``deterministic`` — the check is exact, so a failure is a fact. **This version declares
+      none.** The injection probe was assumed to qualify and does not: the canary's presence is
+      exact, while "the tool followed the injected instruction" is an inference drawn from it,
+      and a tool that refuses the injection has to name the canary in order to say so.
     - ``screen`` — a useful indicator that cannot fully distinguish the behavior it is
       named for. Substring matching over free-text output is a screen: it sees that a word
       appeared, not what the tool *did* with it. A screen surfaces a case for review; it
@@ -264,9 +266,14 @@ class ToolOutput(BaseModel):
     A real vendor tool's adapter is responsible for mapping its native response
     onto this shape. ``text`` is the tool's artifact (for the CDS example, its
     recommendation); ``flags`` are
-    any self-reported safety/abstention signals; ``followed_injection`` records
-    whether an embedded injection probe changed the output (the adapter detects
-    this, not the harness, because only the adapter knows the tool's contract).
+    any self-reported safety/abstention signals; ``followed_injection`` is the
+    adapter's reading of whether an embedded injection changed the output.
+
+    **Both self-reports are cross-checked against the tool's own text and neither is
+    trusted where it would remove a check.** The adapter is the vendor's code in a real
+    integration, and a verdict supplied by the party under evaluation is not evidence:
+    abstention in particular used to delete measurements, so the harness reads that one
+    itself and reports any disagreement.
     """
 
     model_config = ConfigDict(extra="forbid")

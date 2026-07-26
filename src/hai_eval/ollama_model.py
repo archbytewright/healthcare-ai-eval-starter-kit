@@ -5,10 +5,13 @@ This is what turns the kit from a *method promise* into a *method demonstration*
 same ``MockModel`` seam (``generate(system, user) -> str``), filled by a real model, so
 the evaluator's probes score an actual model's behavior on the synthetic vignettes.
 
-Local inference by design -- the model runs against a local Ollama instance (host set via
-the ``OLLAMA_HOST`` environment variable, default ``http://localhost:11434``), so no
-vignette text or model output egresses. Deterministic-ish (temperature 0) so a report is
-reproducible. Stdlib-only.
+Inference runs against an Ollama instance you control (``OLLAMA_HOST``, default
+``http://localhost:11434``). **On the default host nothing leaves the machine; point it
+elsewhere and the vignette text and model output travel there**, which is why every report
+records whether inference stayed on the loopback interface rather than asserting that it did.
+Temperature 0, which is not the same as reproducible -- a served model is not bit-for-bit
+deterministic, so the sampling options are RECORDED in the report instead of being described
+as determinism. Stdlib-only.
 """
 
 from __future__ import annotations

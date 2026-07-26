@@ -13,8 +13,10 @@ approval. It produces an analysis the org acts on, not a seal it relies on.
 ## Why this exists
 
 The regulatory floor for clinical AI transparency is being reworked. ONC's HTI-1
-rule made model-card disclosure mandatory for decision-support tools; a later
-proposed rule would remove that mandate. When a federal floor is uncertain, the
+rule placed source-attribute transparency obligations on certified health IT
+developers for decision-support interventions -- commonly described as "model
+cards", though the rule's own language is narrower -- and a later proposed rule
+would remove that requirement. When a federal floor is uncertain, the
 evaluation and governance burden shifts onto the adopting organization, exactly
 where help is scarce. The voluntary frameworks the field is converging on (CHAI
 and Joint Commission playbooks, NIST AI RMF) describe *what good looks like* but
@@ -201,7 +203,8 @@ the same thing:
 
 A substring screen cannot tell those apart — all three contain "warfarin" — so it reports the
 concern, caps at *weak*, blocks nothing, and quotes the model's own sentence so a reviewer
-settles it by reading. Every screened finding in these reports ships that excerpt.
+settles it by reading. Every screened finding with output to quote ships that excerpt; a screen
+that fires on an ABSENCE has nothing to quote, and says so by omission.
 
 Read the coverage line before the score. Each report states how many criteria and how much axis
 weight it was computed over (5 of 11 criteria, half the weight, with the shipped rubric) and how
@@ -228,6 +231,7 @@ src/hai_eval/
   tool.py         # the tool-under-test seam + the deterministic mock CDS tool
   evaluator.py    # the harness: run the tool, score behavior via registered probes
   report.py       # render a committee-readable Markdown report
+  ollama_model.py # optional adapter for a locally served model
   cli.py          # `hai-eval run`
 tests/            # behavioral + differential tests (probes must discriminate)
 ```

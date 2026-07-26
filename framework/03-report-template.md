@@ -29,6 +29,10 @@ blocking findings before any detail.
 - **Cases:** `<n>` synthetic vignette(s); `<answered>` answered, `<declined>` declined
 
 **Recommendation:** one of:
+- *No automated verdict is available* (every check that ran is a screen — **this is what the
+  shipped rubric produces today**, since it declares no deterministic criteria).
+- *No recommendation possible* (the tool declined every case, so nothing about its behavior
+  was measured).
 - *Do not adopt as-is* (any blocking finding).
 - *Insufficient coverage to recommend either way* (the tool declined most or all cases, or too
   little of the rubric was assessed for the number to mean anything).
