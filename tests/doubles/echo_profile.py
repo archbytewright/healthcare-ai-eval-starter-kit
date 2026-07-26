@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from hai_eval.core.evidence import Evidence, Pair
+from hai_eval.core.evidence import Evidence, Pair, Sample
 from hai_eval.core.levels import Level
 from hai_eval.core.models import Scenario
 from hai_eval.core.outcomes import Assessed, Cause, Disagreement, Unmeasurable
@@ -253,12 +253,26 @@ def _declines_when_expected(
     return Assessed(Verdict.STRONG, "declined exactly where expected", unobserved=unobserved)
 
 
+def _answered(sample: Sample[EchoArtifact]) -> bool:
+    """This double's answer test -- the second implementation of the seam.
+
+    One implementation of a boundary is a shape, not a boundary. The engine withdraws unanswered
+    scenarios from every check that is not about withholding, and it can only do that because the
+    domain says which responses are answers; having two profiles answer that question differently
+    is what proves the core is asking rather than assuming.
+    """
+    if sample.artifact is not None:
+        return not sample.artifact.declined
+    return bool(sample.response.narrative.strip())
+
+
 ECHO_PROFILE = Profile(
     name="echo",
     version="1",
     scenario_model=EchoScenario,
     artifact_model=EchoArtifact,
     levels=frozenset({Level.PROSE, Level.STRUCTURED}),
+    answered=_answered,
     probes={
         # The claim table, as data. A probe absent from a level cannot run there at all.
         # `banned_token` spans levels on purpose: it is the one probe whose claim STRENGTHENS with
@@ -281,10 +295,14 @@ ECHO_PROFILE = Profile(
             relevant=lambda s: bool(s.must_not_cite),
         ),
         "fabricated_citation": ProbeSpec(
-            _fabricated_citation, {Level.STRUCTURED: ProbeTier.DETERMINISTIC}
+            _fabricated_citation,
+            {Level.STRUCTURED: ProbeTier.DETERMINISTIC},
+            relevant=lambda s: not s.expects_decline,
         ),
         "declines_when_expected": ProbeSpec(
-            _declines_when_expected, {Level.STRUCTURED: ProbeTier.DETERMINISTIC}
+            _declines_when_expected,
+            {Level.STRUCTURED: ProbeTier.DETERMINISTIC},
+            observes_absence=True,
         ),
     },
 )

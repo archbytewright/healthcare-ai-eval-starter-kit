@@ -517,15 +517,49 @@ def _score_one(
     # Withholding is thus exactly as costly as failing, which is the strictest honest treatment: a
     # tool that would have failed gains nothing, and one that would have passed loses by not
     # showing it.
-    # Scenarios nothing could judge -- evidence too thin, or the subject emitted nothing to look
-    # at. Intersected with the relevant set, because a probe naming ids outside its own relevance
-    # drove the count negative and produced a hard fail out of arithmetic.
-    unjudged = ({p.scenario.id for p in short} | unobserved) & {p.scenario.id for p in relevant}
+    # Scenarios nothing could judge -- evidence too thin, the subject emitted nothing to look at,
+    # or the subject never answered at all. Intersected with the relevant set, because a probe
+    # naming ids outside its own relevance drove the count negative and produced a hard fail out of
+    # arithmetic.
+    #
+    # ⭐ `withheld` is computed HERE rather than trusted from the probe, and that placement is the
+    # whole point. "A check may not award a pass over a scenario it could not look at" was a rule
+    # every probe had to remember, guarded by a test on one probe -- so it held for exactly as long
+    # as nobody wrote another one. It stopped holding the first time somebody did. A probe that
+    # measures withholding itself opts out (`observes_absence`), because withdrawing the deferrals
+    # from that one deletes the evidence it exists to judge.
+    #
+    # A sample also counts as withheld when it falls BELOW what this same run has already shown the
+    # tool can expose. Without that, dropping to prose is a way to erase evidence of withholding and
+    # be paid for it: a response declaring a deferral is unanswered, and the identical response with
+    # its artifact stripped looks like an ordinary prose answer and scores. The ceiling is
+    # DEMONSTRATED rather than declared -- derived from what the tool actually produced somewhere in
+    # this run, not from what its adapter claims -- so it cannot be gamed by understating the
+    # declaration either. Note the direction: this penalises falling BELOW the ceiling. Resolving
+    # the whole run to its WEAKEST response was a different bug, and an opposite one.
+    # Known gap: a uniformly degraded run has no ceiling to fall below. That needs the adapter's
+    # DECLARED ceiling (P3); the property test names the falsifying example.
+    ceiling = max((s.level for p in evidence.pairs for s in p.samples), default=Level.PROSE)
+    withheld = (
+        set[str]()
+        if spec.observes_absence
+        else {
+            p.scenario.id
+            for p in relevant
+            if not all(profile.answered(s) and s.level >= ceiling for s in p.samples)
+        }
+    )
+    unjudged = ({p.scenario.id for p in short} | unobserved | withheld) & {
+        p.scenario.id for p in relevant
+    }
     if unjudged:
         judged = len(relevant) - len(unjudged)
-        # An OBSERVED failure stands, whatever else was concealed. Otherwise a tool could disarm a
-        # violation the check plainly saw by going quiet on a different scenario.
-        if verdict != Verdict.FAIL:
+        # An OBSERVED failure stands, whatever else was concealed -- otherwise a tool could disarm a
+        # violation the check plainly saw by going quiet on a different scenario. But "observed"
+        # means at least one scenario was actually judged: with none, the verdict rests on nothing,
+        # and a hard fail resting on nothing was blocking adoption on evidence no one had. The
+        # generated property found it the moment withheld answers began to count as unjudged.
+        if verdict != Verdict.FAIL or judged == 0:
             # Everything else becomes NOT MEASURED, contributing zero and blocking nothing.
             #
             # Capping at weak was the third wrong answer here, and the property that generates both

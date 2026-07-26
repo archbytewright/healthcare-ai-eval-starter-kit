@@ -21,7 +21,7 @@ from hai_eval.core.verdicts import TIER_ORDER, ProbeTier
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-    from hai_eval.core.evidence import Evidence
+    from hai_eval.core.evidence import Evidence, Sample
     from hai_eval.core.models import Criterion
     from hai_eval.core.outcomes import Outcome
 
@@ -51,6 +51,19 @@ class ProbeSpec:
     verdict its own generated reports had stopped issuing, and survived a regeneration because it
     was hand-written rather than derived.
     """
+    observes_absence: bool = False
+    """Whether this check is ABOUT the subject withholding, and so must see what it withheld.
+
+    Almost every check asks what an answer did, and an answer that was never given is not evidence
+    that it did nothing wrong -- so the engine withdraws those scenarios from the check's numerator
+    before it runs (see ``Profile.answered``). A check that measures *declining itself* is the one
+    exception: withdraw the deferrals from it and it can no longer see the thing it exists to
+    judge.
+
+    Fail-safe by default. Forgetting to set this costs the subject a criterion; setting it wrongly
+    could buy one, so the direction of the mistake matters and this is the harmless direction.
+    """
+
     relevant: Callable[[Any], bool] = lambda _scenario: True
     """Which scenarios this check applies to at all.
 
@@ -75,6 +88,19 @@ class ProbeSpec:
         return self.claims[max(usable)] if usable else None
 
 
+def produced_an_answer(sample: Sample[Any]) -> bool:
+    """Domain-neutral default: the subject produced *something* to look at.
+
+    A profile whose subjects can decline must override this, because declining is domain-shaped --
+    the core cannot know which field means "I am not answering". What the core CAN do is refuse to
+    let a check award a pass over a response that was never given, once the profile says which
+    responses those are.
+    """
+    if sample.artifact is not None:
+        return True
+    return bool(sample.response.narrative.strip())
+
+
 @dataclass(frozen=True)
 class Profile:
     """A domain plugged into the core.
@@ -90,6 +116,20 @@ class Profile:
     artifact_model: type[BaseModel] | None
     probes: Mapping[str, ProbeSpec]
     levels: frozenset[Level]
+    answered: Callable[[Any], bool] = produced_an_answer
+    """Did this draw actually answer, in this domain's terms?
+
+    ⭐ **The structural half of a guarantee that used to be a convention.** The rule "a check may
+    not award a pass over a scenario it could not look at" was real, documented, and enforced in
+    exactly one place: the probe that happened to implement it. Every probe written afterwards
+    re-opened the hole, and six of them duly did -- an empty answer satisfies every check shaped
+    "the forbidden thing is absent from what the tool did", so a subject that declined everything
+    collected strong verdicts across the board.
+
+    The engine now withdraws unanswered scenarios from a criterion's numerator *before the probe
+    runs*, so no probe can pass over them however it is written. The domain supplies only the one
+    thing the core cannot know: which responses count as answers.
+    """
 
     @property
     def ref(self) -> str:
