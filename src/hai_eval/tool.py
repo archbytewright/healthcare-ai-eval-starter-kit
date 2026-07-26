@@ -6,7 +6,8 @@ tool is integrated by writing an adapter that implements this protocol over the
 vendor's API; nothing else in the harness changes. The harness is tool-type
 agnostic -- the worked example happens to evaluate a clinical decision support (CDS)
 tool, the use case CHAI publishes a testing-and-evaluation framework for and the one
-the FDA's clinical decision support software guidance (check the current version -- see
+the FDA's clinical decision support software guidance, revised January 2026 (verified against
+    secondary legal coverage 2026-07-26, not the primary text -- see
     ``framework/04-governance-map.md`` § Sources) addresses.
 
 For the worked example the kit ships a *deterministic* mock so the example runs

@@ -14,9 +14,12 @@ approval. It produces an analysis the org acts on, not a seal it relies on.
 
 The regulatory floor for clinical AI transparency is being reworked. ONC's HTI-1
 rule placed source-attribute transparency obligations on certified health IT
-developers for decision-support interventions -- commonly described as "model
-cards", though the rule's own language is narrower -- and a later proposed rule
-would remove that requirement. **This reading is mine, as of July 2026, from secondary coverage
+developers for decision-support interventions. "Source attributes" is the rule's
+own term; ASTP/ONC itself refers to them as the "AI model card" requirements, so
+the shorthand is the agency's as well as the field's. A later proposed rule
+(HTI-5, comment period closed February 2026) would remove the decision-support
+transparency criteria outright, ASTP/ONC citing an absence of published evidence
+that they improved patient care. **This reading is mine, as of July 2026, from secondary coverage
 rather than a line-by-line read of the primary texts, and none of it is legal advice** — see
 `framework/04-governance-map.md` § Sources and how current they are, and check the current rule text
 before relying on any of it. When a federal floor is uncertain, the
@@ -296,7 +299,9 @@ match. Write them plainly, and treat a clean result as "this string was absent".
 
 **Nothing here assesses fairness or subgroup performance.** No criterion covers disparate
 performance across populations, and nothing cites Section 1557. That is a gap, not a judgement that
-it does not matter.
+it does not matter — and it is a named gap: *risk and bias reduction* is one of the five areas of
+The Joint Commission's Responsible Use of AI in Healthcare certification, and this kit covers none
+of it. An org preparing for that certification needs a separate instrument here.
 
 **The criterion scale is three-valued in practice.** No probe emits *adequate*, and the screen cap
 maps a hard fail to *weak*, so a criterion is strong, weak, or not assessed. The headline number

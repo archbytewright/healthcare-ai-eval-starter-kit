@@ -17,14 +17,18 @@ proposed rule would remove that requirement. When a federal floor is uncertain, 
 onto voluntary frameworks and local discipline. The frameworks the field is consolidating around
 are:
 
-- **CHAI** (Coalition for Health AI): responsible-use guidance and governance
-  playbooks; a membership coalition, not a certifier. (An earlier third-party assurance-lab
-  model appears not to have held, and the surviving artifact is the playbooks — verify the
-  current state directly before relying on this.)
-- **The Joint Commission**: responsible-use guidance jointly with CHAI, and a
-  voluntary AI certification for *healthcare organizations* — the direction of travel is
-  org-level accreditation rather than model-level certification. Check its current status and
-  scope before planning around it.
+- **CHAI** (Coalition for Health AI): responsible-use guidance jointly with The Joint
+  Commission, and a set of governance playbooks (released May 2026, structured around eight
+  elements); a membership coalition, not a certifier. An earlier third-party assurance-lab model
+  appears not to have held; the surviving artifacts are the playbooks, a model-card template and
+  a registry.
+- **The Joint Commission**: the **Responsible Use of AI in Healthcare (RUAIH) certification**,
+  launched June 2026 — voluntary, for *healthcare organizations* rather than for individual AI
+  tools, and organised around five areas: governance; effective data management; risk and bias
+  reduction; monitoring, evaluating and validating safety performance, effectiveness and
+  responsible use; and transparency, education and training. The direction of travel is org-level
+  accreditation rather than model-level certification, and it is now a live programme rather than
+  a projected one.
 - **NIST AI Risk Management Framework**: the general govern / map / measure /
   manage structure that the healthcare-specific guidance sits on top of.
 
@@ -68,15 +72,19 @@ This map and the evaluation are **advisor, not certifier**. There is no licensur
 evaluators, so an assessment can be offered freely, but the method deliberately does not mint a
 seal of approval. Two reasons, the first of which is a judgement about exposure and not legal
 advice: declaring a tool "good enough" invites responsibility if a patient is later harmed, and a
-seal is worth only the issuer's recognized authority. The recognized authority being built is
-the Joint Commission's org-level certification, so the posture here is to help an
-org prepare for *that*, not to substitute for it.
+seal is worth only the issuer's recognized authority. The org-level authority now in the field is
+the Joint Commission's RUAIH certification (launched June 2026), so the posture here is to help an
+org prepare for *that*, not to substitute for it. Note the exposure argument above stands on its
+own regardless of how that programme develops.
 
 ## Sources and how current they are
 
-Every regulatory statement in this document is the author's reading as of **July 2026**, written
-from secondary coverage rather than from a line-by-line read of the primary texts, and none of it
-is legal advice. Rule designators and dates move; the direction of travel is the durable part,
+Every regulatory statement in this document is the author's reading as of **2026-07-26**, and none
+of it is legal advice. The named programmes, dates and area names were checked against public
+sources on that date; the underlying **rule and guidance texts were not read line by line**, so the
+characterisations are secondary-source readings even where the existence and naming are confirmed.
+The Joint Commission's own pages could not be retrieved directly (they refuse automated requests),
+so the RUAIH details rest on its press releases and consistent trade coverage. Rule designators and dates move; the direction of travel is the durable part,
 the specifics are not. Before relying on any of it in an engagement, check the current text of:
 the ONC/ASTP HTI rules on decision-support transparency, FDA's clinical decision support software
 guidance, the NIST AI Risk Management Framework and its generative-AI profile, CHAI's published
