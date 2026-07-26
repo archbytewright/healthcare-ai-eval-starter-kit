@@ -10,6 +10,21 @@ judge integration, but no one positioned to independently test whether a tool's
 It is a due-diligence aid. It is not an assurance lab, a certification, or an
 approval. It produces an analysis the org acts on, not a seal it relies on.
 
+## Disclaimer
+
+This kit is a due-diligence aid. It is not a medical device, not clinical
+decision support, and not a source of medical advice. Nothing it produces
+should be used to make or inform a decision about the care of any patient. Its
+outputs are evidence for a procurement conversation, subject to the limitations
+stated in *What this version cannot do*.
+
+Nothing here is legal, regulatory, or compliance advice. Regulatory
+descriptions are one person's reading of secondary sources at a point in time.
+Verify against current rule text before relying on any of it.
+
+The software is provided "as is", without warranty of any kind, and the author
+accepts no liability arising from its use. See `LICENSE` for the full terms.
+
 ## Why this exists
 
 The regulatory floor for clinical AI transparency is being reworked. ONC's HTI-1
