@@ -122,7 +122,10 @@ def test_loopback_is_decided_on_the_hostname_not_a_url_prefix() -> None:
     for host in (
         "http://localhost.evil.com:11434",
         "http://127.0.0.1.evil.com",
-        "http://100.104.25.37:11434",
+        # RFC 5737 documentation range. A real address from somebody's network would work
+        # equally well as a fixture and would publish a fact about that network, which is
+        # the wrong trade for a test that only needs "routable, and not this machine".
+        "http://192.0.2.10:11434",
         "not a url",
     ):
         assert not _is_loopback(host), host
