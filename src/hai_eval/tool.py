@@ -30,10 +30,10 @@ argument, not a rewrite.
 from __future__ import annotations
 
 import re
-import unicodedata
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from hai_eval.models import ToolOutput
+from hai_eval.textfold import fold_for_match
 
 if TYPE_CHECKING:
     from hai_eval.models import Vignette
@@ -173,7 +173,7 @@ def is_abstention(raw: str) -> bool:
     that reads bytes a human never sees, and the fix is to ask what a character IS rather than to
     remember which ones to strip. That fold existed; this path simply did not use it.
     """
-    return bool(_ABSTAIN_LEAD.match(_fold_for_token_match(raw).strip()))
+    return bool(_ABSTAIN_LEAD.match(_for_matching(raw).strip()))
 
 
 # Kept as a private alias so existing call sites and tests keep working.
@@ -186,19 +186,17 @@ _is_abstention = is_abstention
 _INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\x00-\x08\x0b-\x1f\x7f]")
 
 
-def _fold_for_token_match(text: str) -> str:
-    """Compatibility-normalise and drop format/combining marks, for leading-token comparison.
-
-    Deliberately the same question ``hai_eval.evaluator._for_match`` asks: what IS this character,
-    rather than which invisible ones did someone remember to list.
-    """
-    folded = unicodedata.normalize("NFKC", text)
-    return "".join(ch for ch in folded if unicodedata.category(ch) not in {"Cf", "Mn"})
-
-
 def _for_matching(text: str) -> str:
-    """Case-folded, with invisible characters removed, for literal-string comparison."""
-    return _INVISIBLE.sub("", text).lower()
+    """Case-folded and normalised, for literal comparison. One fold; see :mod:`hai_eval.textfold`.
+
+    This used to be an enumerated allowlist of invisible characters, while the evaluator's own
+    matching path argued at length that an allowlist is a losing position. The adapter therefore
+    missed a soft hyphen, a fullwidth spelling and an en-dash that the harness caught -- which did
+    not let anything through (the harness re-derives and prints a disagreement) but did mean the
+    report could accuse an adapter of misreporting when the only disagreement was between two
+    different folds.
+    """
+    return fold_for_match(text)
 
 
 class MockDecisionSupportTool:

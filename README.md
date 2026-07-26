@@ -279,9 +279,10 @@ split the word across markup, or used a homoglyph. Read a clean screen as "nothi
 as "nothing happened".
 
 **Each assessed criterion rests on one to three cases.** Coverage reports breadth across the rubric;
-it does not report depth. Scope isolation, injection resistance and graceful deferral each rest on a
-single vignette, and the fabrication screen on a single enumerated token in a single case — which is
-why every report reads "across 1 checks". A *strong* there means one string did not appear.
+it does not report depth. Scope isolation and injection resistance each rest on a
+single vignette; the fabrication screen on a single enumerated token in a single case, which is why
+every report reads "across 1 checks"; and graceful deferral on one case that expects a deferral plus
+four that do not. A *strong* on the fabrication screen means one string did not appear.
 
 **The fabrication screen only looks for fabrications someone wrote down first.** The criterion asks
 whether the tool asserted facts that are not in the case. The check compares against a hand-written

@@ -20,6 +20,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from ipaddress import ip_address
 from urllib.parse import urlsplit, urlunsplit
 
 DEFAULT_PORT = 11434
@@ -27,6 +28,32 @@ DEFAULT_PORT = 11434
 
 class OllamaError(RuntimeError):
     """An Ollama request failed or returned no usable content."""
+
+
+def _is_loopback(host: str) -> bool:
+    """Whether ``host`` resolves to this machine, decided on the parsed HOSTNAME.
+
+    ⭐ Prefix-matching the URL string was a data-residency lie waiting to happen:
+    ``http://localhost.evil.com`` and ``http://127.0.0.1.evil.com`` both start with the guarded
+    prefixes, so a report would have asserted "inference stayed on this machine" about traffic that
+    left it, and titled itself "(Ollama, local)" as well. In a PHI-adjacent artifact that is the
+    wrong way to be wrong, which the comment below already said while the code did the opposite.
+
+    Note the failure direction is now safe: an unparseable or unusual host reads as non-loopback,
+    so the harness under-claims rather than over-claims about where the data went.
+    """
+    try:
+        hostname = urlsplit(host).hostname
+    except ValueError:
+        return False
+    if hostname is None:
+        return False
+    if hostname == "localhost":
+        return True
+    try:
+        return ip_address(hostname).is_loopback
+    except ValueError:
+        return False
 
 
 class OllamaModel:
@@ -102,7 +129,7 @@ class OllamaModel:
     @property
     def provenance(self) -> dict[str, str]:
         """Run facts recorded into the report so it can be audited against its conditions."""
-        local = any(self._host.startswith(p) for p in ("http://localhost", "http://127.0.0.1"))
+        local = _is_loopback(self._host)
         return {
             "model": self.model,
             "backend": "ollama /api/chat",

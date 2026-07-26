@@ -116,7 +116,7 @@ and a rename used to disable every blocking finding with no warning.
 
 An axis with no assessed criteria is dropped from both numerator and weight total, which is the
 right arithmetic and an incomplete presentation on its own. With the shipped rubric that means
-60% of the declared weight — the document-review axes — is absent from the number, so the report
+60% of the declared weight is absent from the number: the three document-review axes (50%) plus one manual criterion inside the workflow axis (10%), so the report
 states the assessed criteria count, the assessed weight fraction, and how many cases the tool
 answered rather than declined, next to the score itself.
 

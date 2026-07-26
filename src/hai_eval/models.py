@@ -212,7 +212,7 @@ class Vignette(BaseModel):
         """Reject annotations too short to mean anything.
 
         An empty string matches every output unconditionally, and a one- or two-character
-        token matches inside unrelated words ("ACE" inside "antACid"), so both silently
+        token matches inside unrelated words ("Na" inside "Nausea"), so both silently
         fabricate a result. The YAML header asked authors not to do this; asking is not a
         control.
         """
