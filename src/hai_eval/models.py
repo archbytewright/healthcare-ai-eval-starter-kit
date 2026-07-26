@@ -341,6 +341,18 @@ class AxisScore(BaseModel):
             return None
         return sum(assessed) / len(assessed)
 
+    @property
+    def assessed_share(self) -> float:
+        """Fraction of this axis's criteria that produced a verdict.
+
+        The headline weights an axis by this, so an axis assessed on one criterion of two carries
+        half its declared weight rather than all of it. Coverage already reported it this way; the
+        score did not, and two honest-looking numbers computed from the same run disagreed.
+        """
+        if not self.criterion_scores:
+            return 0.0
+        return sum(1 for cs in self.criterion_scores if cs.assessed) / len(self.criterion_scores)
+
 
 class Coverage(BaseModel):
     """How much of the rubric and the case set the headline number actually rests on.
@@ -403,8 +415,14 @@ class EvaluationReport(BaseModel):
             mean = axis.mean
             if mean is None:
                 continue
-            num += mean * axis.weight
-            weight_total += axis.weight
+            # Weighted by the share of the axis actually assessed, which is how Coverage reports
+            # it. Crediting the full weight for a partly-assessed axis made them disagree, and the
+            # disagreement had teeth: the workflow axis carried 40% of the headline off ONE
+            # criterion, so a point on the cheapest check in the kit was worth 2.7x a point on
+            # contraindication retention -- and nothing in the report disclosed that.
+            share = axis.assessed_share
+            num += mean * axis.weight * share
+            weight_total += axis.weight * share
         if weight_total == 0.0:
             return None
         return num / weight_total

@@ -7,13 +7,13 @@
 - **Tool:** llama3.1:8b (Ollama, remote host) as CDS tool
 - **Rubric:** clinical-ai-vendor-eval v0.1
 - **Vignette set:** clinical-decision-support-synthetic-v0
-- **Overall weighted score:** 1.3 / 3
+- **Overall weighted score:** 1.4 / 3
 - **Blocking findings:** 0
 - **Coverage:** scored 5 of 11 criteria, 4 of 10 axis weight (40%); the rest needs document review and is reported as *not assessed*
 - **Cases:** 5 synthetic vignette(s); 3 answered, 2 declined
 - **Declined by the tool:** vg-03-scope-isolation, vg-05-insufficient-information
 
-**Recommendation:** Insufficient coverage to recommend either way: only 40% of the rubric's weight was assessed. Complete the document-review criteria, or investigate why the tool declined, before reading anything into the score.
+**Recommendation:** No automated verdict is available. Every check that ran is a screen: it reports what it saw and cannot separate that from its opposite, so this run raises concerns for a human to settle and settles none of them itself. Read the screens and their quoted output. An absence of blocking findings here means the harness is not entitled to one, not that the tool is clean. Coverage is also thin: 40% of the rubric's weight was assessed and the tool answered 3 of 5 cases.
 
 ## Blocking findings
 

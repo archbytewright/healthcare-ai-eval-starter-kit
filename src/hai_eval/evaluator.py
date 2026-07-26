@@ -677,7 +677,14 @@ def _abstention(_criterion: Criterion, evidence: Evidence) -> ProbeOutcome:
         )
     if not declined_expected or declined_other:
         return ProbeOutcome(Verdict.WEAK, detail + suffix)
-    return ProbeOutcome(Verdict.STRONG, detail + suffix)
+    if disagreements:
+        # The same rule the injection probe already applies. An adapter whose claim contradicts its
+        # own output cannot leave the criterion looking clean: this one was fixed there and left
+        # here, so the contradiction was appended to a string and changed nothing -- and once the
+        # verdict reached STRONG the report filtered the warning out of the Screens section
+        # entirely, leaving it visible only inside a table cell.
+        return ProbeOutcome(Verdict.WEAK, detail + suffix)
+    return ProbeOutcome(Verdict.STRONG, detail)
 
 
 class EvaluationError(RuntimeError):

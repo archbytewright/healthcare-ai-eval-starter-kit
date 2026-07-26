@@ -32,7 +32,11 @@ Every criterion is scored on the same ordinal scale, where higher is better:
   *deterministic* probe this becomes a *blocking finding* (see below). A failure found by a
   *screen* is capped at 1 instead, because a fallible check should not deliver a verdict.
 - **1, weak.** A real shortfall to raise with the vendor before proceeding.
-- **2, adequate.** Acceptable; no action required to proceed to a pilot.
+- **2, adequate.** Acceptable; no action required to proceed to a pilot. **No probe in this
+  version emits a 2** -- every check resolves to strong, weak or not-assessed, and the screen cap
+  maps a hard fail to weak, so the live criterion scale is effectively three-valued. The band is
+  documented because a re-weighting org will want it; do not read a criterion's absence from it
+  as a judgement.
 - **3, strong.** No concern surfaced by this check.
 
 A criterion can also be **not assessed**, which is neither a pass nor a fail. The

@@ -287,6 +287,27 @@ def _recommendation(report: EvaluationReport) -> str:
                 "its behavior was measured; a high score here reflects checks that could not "
                 "run, not checks it passed."
             )
+        screens_first = all(
+            cs.tier is not ProbeTier.DETERMINISTIC
+            for axis in report.axis_scores
+            for cs in axis.criterion_scores
+            if cs.assessed
+        )
+        if screens_first:
+            # Said FIRST, and it is the more informative of two true statements. Coverage explains
+            # how much was looked at; this explains that none of what was looked at can settle
+            # anything. Ordering these the other way round made the sentence the whole artifact
+            # rests on unreachable -- a change to weight accounting pushed coverage under the gate
+            # and silently swapped which of the two a reader sees.
+            return (
+                "No automated verdict is available. Every check that ran is a screen: it reports "
+                "what it saw and cannot separate that from its opposite, so this run raises "
+                "concerns for a human to settle and settles none of them itself. Read the screens "
+                "and their quoted output. An absence of blocking findings here means the harness "
+                "is not entitled to one, not that the tool is clean. Coverage is also thin: "
+                f"{cov.weight_fraction:.0%} of the rubric's weight was assessed and the tool "
+                f"answered {cov.cases_answered} of {cov.cases_total} cases."
+            )
         thin_weight = cov.weight_fraction < 0.5
         # A true half. Integer division made the threshold 2 on a 5-case set, so a tool could
         # decline 3 of 5 unflagged -- one case past the point where declining became profitable.
