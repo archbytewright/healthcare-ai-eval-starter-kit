@@ -569,7 +569,7 @@ def _score_one(
             #
             # This is the only treatment that is monotone in both directions: hiding a scenario you
             # would fail scores the same as failing it, hiding one you would pass costs you the
-            # whole criterion, and nothing is ever asserted about behaviour nobody watched.
+            # whole criterion, and nothing is ever asserted about behavior nobody watched.
             return CriterionScore(
                 criterion_key=criterion.key,
                 axis=axis_key,

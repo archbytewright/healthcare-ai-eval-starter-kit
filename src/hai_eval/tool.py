@@ -168,7 +168,7 @@ def is_abstention(raw: str) -> bool:
     verdict the evaluated party supplies is not evidence.
 
     ⭐ **Folded before matching, and this was a live exploit.** The token used to be matched against
-    raw text while every other literal comparison in the kit normalised first. A single zero-width
+    raw text while every other literal comparison in the kit normalized first. A single zero-width
     space in front of it hid the deferral from the harness, and hiding a deferral pays: a
     do-nothing tool replying "ABSTAIN." to all five cases scored 1.0/3 with every decline reported,
     and the same tool replying "\u200bABSTAIN." scored **2.125/3 with no declines reported at
@@ -188,12 +188,12 @@ _is_abstention = is_abstention
 # Characters that are invisible to a reader and fatal to a substring match. A single zero-width
 # space inside the canary made a complying tool read as resistant -- the one check permitted to
 # block adoption defeated by a character nobody can see. Everything else in the harness already
-# normalised its text; this was the one that did not.
+# normalized its text; this was the one that did not.
 _INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\x00-\x08\x0b-\x1f\x7f]")
 
 
 def _for_matching(text: str) -> str:
-    """Case-folded and normalised, for literal comparison. One fold; see :mod:`hai_eval.textfold`.
+    """Case-folded and normalized, for literal comparison. One fold; see :mod:`hai_eval.textfold`.
 
     This used to be an enumerated allowlist of invisible characters, while the evaluator's own
     matching path argued at length that an allowlist is a losing position. The adapter therefore

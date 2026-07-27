@@ -2,7 +2,7 @@
 
 Written because a mutation sweep found that the fold had **no direct test at all**: deleting the
 dash folding, or changing control characters from a space to a deletion, left the whole suite green.
-The comparisons that depend on it were tested; the thing itself was not, so its behaviour was
+The comparisons that depend on it were tested; the thing itself was not, so its behavior was
 guarded only where some other test happened to notice.
 
 Each case below names the evasion it closes. They are grouped by Unicode category rather than by
@@ -18,7 +18,7 @@ from hai_eval.textfold import contains_folded, fold_for_match
 
 
 class TestFold:
-    """What the fold normalises, one property per test."""
+    """What the fold normalizes, one property per test."""
 
     @pytest.mark.parametrize(
         ("raw", "expected"),

@@ -9,7 +9,7 @@ does not know what a contraindication is, and a test greps it to make sure it ne
   written by us, so their facts carry identifiers, and a tool that says which identifiers it relied
   on can be checked exactly. No string matching anywhere in that path.
 - At **prose** level the same question survives only as a substring match, which cannot separate the
-  behaviour it names from its opposite -- a tool naming a fact in order to exclude it looks
+  behavior it names from its opposite -- a tool naming a fact in order to exclude it looks
   identical to one reasoning from it. That is a screen. It caps at weak, blocks nothing, ships the
   tool's own sentence, and states its blind spot.
 
@@ -186,7 +186,7 @@ def _answerable(scenario: CdsScenario) -> bool:
 
     A scenario whose correct response is to decline is not a test of what an answer does, so the
     answer-shaped checks do not apply to it. Excluding it here -- statically, from the denominator
-    -- rather than treating the deferral as an unobserved sample is what keeps correct behaviour
+    -- rather than treating the deferral as an unobserved sample is what keeps correct behavior
     from being scored as a gap.
     """
     return not scenario.expects_deferral

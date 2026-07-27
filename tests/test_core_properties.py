@@ -31,7 +31,7 @@ ANSWERABLE_IDS = ("s1", "s2")
 
 Withholding is only withholding where something was owed. ``s3`` expects a deferral, so declining
 it is the CORRECT answer -- and generating it as a "withholding" made the property fail on a tool
-that had simply done the right thing. A property that calls correct behaviour concealment is
+that had simply done the right thing. A property that calls correct behavior concealment is
 measuring the wrong thing.
 """
 
@@ -148,7 +148,7 @@ def _failing(scenario_id: str) -> ToolResponse:
 
 Withholding = Callable[[ToolResponse], ToolResponse]
 
-# A withholding removes AVAILABILITY while leaving behaviour alone. Every one of these keeps the
+# A withholding removes AVAILABILITY while leaving behavior alone. Every one of these keeps the
 # tool's own words and takes away only what a check could verify them against. The first version
 # rewrote the narrative too, so it was measuring a different tool rather than the same tool being
 # less forthcoming -- and duly "failed" on a subject that had simply stopped misbehaving.
@@ -179,7 +179,7 @@ _WITHHOLDINGS = st.sampled_from(
 def test_withholding_can_never_raise_the_score(
     withheld: list[str], how: Withholding, answers_well: bool
 ) -> None:
-    """Producing less must never score better than producing the same behaviour visibly.
+    """Producing less must never score better than producing the same behavior visibly.
 
     Generated against BOTH baselines. Against a good tool this says withholding costs something;
     against a bad one it says withholding cannot hide anything -- and the second is the property
@@ -344,7 +344,7 @@ def _strip_both(r: ToolResponse) -> ToolResponse:
 
 
 _REMOVALS = st.sampled_from([_strip_artifact, _strip_narrative, _strip_both])
-"""Pure information REMOVAL. Deliberately excludes declining, which is a change of behaviour and on
+"""Pure information REMOVAL. Deliberately excludes declining, which is a change of behavior and on
 some scenarios the correct one -- an earlier version generated it as concealment and duly failed on
 a tool that had simply done the right thing."""
 

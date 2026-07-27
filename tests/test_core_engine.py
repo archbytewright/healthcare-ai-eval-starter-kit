@@ -1,4 +1,4 @@
-"""Engine behaviour, exercised entirely through the test-double profile.
+"""Engine behavior, exercised entirely through the test-double profile.
 
 Every test here is a way v0.1 produced a WRONG answer, restated against the new core. If the core
 needed anything domain-specific to run these, the seam would have leaked -- so the fact that a
@@ -375,7 +375,7 @@ def test_a_disagreement_on_a_fallible_check_still_cannot_block() -> None:
     for criterion in data["criteria"]:
         if criterion["key"] == "aux.decline":
             criterion["tier"] = "screen"
-            criterion["screen_caveat"] = "internal consistency is not behaviour"
+            criterion["screen_caveat"] = "internal consistency is not behavior"
         if criterion["key"] == "core.cites":
             criterion["axis"] = "aux"  # move the deterministic checks off the blocking axis
         if criterion["key"] in {"core.scope", "core.invented"}:
@@ -617,7 +617,7 @@ def test_an_observed_failure_still_blocks_despite_partial_evidence() -> None:
 
 
 def test_when_nothing_is_judgeable_the_criterion_is_unmeasurable_not_failed() -> None:
-    """Saying "fail" over an empty observation asserts something about behaviour nobody saw."""
+    """Saying "fail" over an empty observation asserts something about behavior nobody saw."""
     script: Script = {sid: Step(level=Level.PROSE, artifact=None) for sid in ("s1", "s2", "s3")}
     score = _cs(_run(script), "core.cites")
     assert score.verdict is None

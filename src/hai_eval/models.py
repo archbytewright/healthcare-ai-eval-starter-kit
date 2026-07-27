@@ -227,7 +227,7 @@ class Vignette(BaseModel):
             if len(fold_for_match(v).strip()) < 3:
                 msg = (
                     f"annotation {v!r} is too short to match reliably once folded "
-                    f"(need 3+ characters after normalisation)"
+                    f"(need 3+ characters after normalization)"
                 )
                 raise ValueError(msg)
         return values

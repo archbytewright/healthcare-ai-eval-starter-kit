@@ -53,7 +53,7 @@ MUTATIONS: tuple[Mutation, ...] = (
         equivalent=True,
         note=(
             "Equivalent while the cap holds: nothing below DETERMINISTIC can carry a FAIL by the "
-            "time the gate reads it, so no test can tell the two apart. Kept as defence in depth "
+            "time the gate reads it, so no test can tell the two apart. Kept as defense in depth "
             "against a future edit that moves the cap, and declared equivalent rather than left "
             "looking like a guarded invariant -- the cap itself is guarded by screen-cap-removed."
         ),

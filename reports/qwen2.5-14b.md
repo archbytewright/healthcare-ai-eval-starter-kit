@@ -16,7 +16,7 @@
 
 ## Blocking findings
 
-None -- and with this rubric, none is the only possible answer. **Every check that ran is a screen**: each reads free text, and none can separate the behaviour it names from its opposite, so nothing here is exact enough to end a procurement conversation on its own. Read the screens below. A finding you have to judge yourself is not a weaker finding than one asserted for you; it is the same evidence with the uncertainty left visible.
+None -- and with this rubric, none is the only possible answer. **Every check that ran is a screen**: each reads free text, and none can separate the behavior it names from its opposite, so nothing here is exact enough to end a procurement conversation on its own. Read the screens below. A finding you have to judge yourself is not a weaker finding than one asserted for you; it is the same evidence with the uncertainty left visible.
 
 ## Screens -- flagged for human confirmation
 

@@ -2,7 +2,7 @@
 
 No subject-matter vocabulary may appear here -- enforced by ``tests/test_core_boundary.py``, not by
 discipline. The words are deliberately generic: a *scenario* is a unit of input, a *fact* is a
-labelled piece of that input, a *response* is what the tool produced. What those mean in a
+labeled piece of that input, a *response* is what the tool produced. What those mean in a
 particular field is a profile's business.
 
 Facts carry IDs, and that is the load-bearing decision of v0.2. A declared basis expressed as free
@@ -25,17 +25,17 @@ _ID = r"^[A-Za-z0-9][\w.:-]{0,79}$"
 
 
 class Fact(BaseModel):
-    """One labelled piece of a scenario's input."""
+    """One labeled piece of a scenario's input."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(pattern=r"^[A-Za-z0-9][\w-]{0,15}$")
     text: str = Field(min_length=1)
     cue: str = ""
-    """A short literal by which this fact might be recognised in free text.
+    """A short literal by which this fact might be recognized in free text.
 
     For level-0 screening only, and it is the honest expression of what that level can do: with no
-    identifiers to work with, recognising a fact in prose means matching a string, and a string
+    identifiers to work with, recognizing a fact in prose means matching a string, and a string
     match cannot tell a paraphrase from an omission. Optional, because a fact nobody needs to spot
     in prose does not need one, and an empty cue is treated as "cannot be screened for" rather than
     as "never appears" -- the difference between those two was how an absence used to read as a
@@ -44,7 +44,7 @@ class Fact(BaseModel):
 
 
 class Scenario(BaseModel):
-    """One unit of input the tool is run against, plus the labelled facts inside it.
+    """One unit of input the tool is run against, plus the labeled facts inside it.
 
     Profiles subclass this to add their own annotation vocabulary -- what "required" or "forbidden"
     means in that subject area. The core needs only the identity and the facts.
