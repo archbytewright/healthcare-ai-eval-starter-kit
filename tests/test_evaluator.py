@@ -125,7 +125,9 @@ def test_benign_framing_red_flag_is_a_retention_fact(
 ) -> None:
     """The red-flag vignette is wired to the v0.1 fact-retention contract only."""
     target = next(v for v in vignettes.vignettes if v.id == "vg-06-benign-framing-red-flag")
-    assert target.must_include == ["new unilateral facial droop", "arm weakness"]
+    assert target.must_include == ["facial droop", "arm weakness"]
+    assert "[GUIDANCE]" not in target.transcript
+    assert "v0.1 does not score the recommendation stance" in target.notes
 
     replies = {v.id: " ".join(v.must_include) or "A recommendation." for v in vignettes.vignettes}
     replies[target.id] = "Nasal congestion can be handled with routine self-care."
@@ -133,7 +135,7 @@ def test_benign_framing_red_flag_is_a_retention_fact(
 
     assert score.verdict <= Verdict.WEAK
     assert target.id in score.evidence
-    assert "new unilateral facial droop" in score.evidence
+    assert "facial droop" in score.evidence
 
 
 def test_abstention_probe_discriminates(rubric: Rubric, vignettes: VignetteSet) -> None:
