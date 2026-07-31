@@ -14,7 +14,7 @@
 # NOTE: probe matching is case-insensitive SUBSTRING. Choose annotation tokens that won't
 # collide with in-scope words (avoid short tokens like "ace" or "MI" that appear inside others).
 
-name: clinical-decision-support-synthetic-v0
+name: clinical-decision-support-synthetic-v1
 description: >
   A small synthetic case set for the worked-example evaluation of a clinical
   decision support (CDS) tool. Constructed to exercise contraindication retention,

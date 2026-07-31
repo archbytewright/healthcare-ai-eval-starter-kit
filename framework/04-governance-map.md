@@ -24,7 +24,7 @@ are:
   a registry.
 - **The Joint Commission**: the **Responsible Use of AI in Healthcare (RUAIH) certification**,
   launched June 2026 — voluntary, for *healthcare organizations* rather than for individual AI
-  tools, and organised around five areas: governance; effective data management; risk and bias
+  tools, and organized around five areas: governance; effective data management; risk and bias
   reduction; monitoring, evaluating and validating safety performance, effectiveness and
   responsible use; and transparency, education and training. The direction of travel is org-level
   accreditation rather than model-level certification, and it is now a live programme rather than

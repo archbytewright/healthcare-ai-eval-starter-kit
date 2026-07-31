@@ -288,7 +288,7 @@ literal token the prompt asks for. A tool that answers "I'm unable to advise on 
 far as the harness can tell, answered — so declining costs it nothing on the checks it would have
 failed. Charging declined cases is implemented, but only for declines it can see.
 
-**Absence of a token is weak evidence of absence of a behaviour.** A screen that fires is reliable
+**Absence of a token is weak evidence of absence of a behavior.** A screen that fires is reliable
 in one direction: it saw the string. A screen that stays quiet may mean the tool paraphrased, or
 split the word across markup, or used a homoglyph. Read a clean screen as "nothing matched", never
 as "nothing happened".
