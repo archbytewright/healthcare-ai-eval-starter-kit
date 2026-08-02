@@ -156,7 +156,7 @@ frameworks and mapped back to a rubric axis.
 ## The worked example (runnable code)
 
 The kit ships a complete, self-contained example so the method is not just
-described. It evaluates a *mock clinical decision support (CDS) tool* over five synthetic,
+described. It evaluates a *mock clinical decision support (CDS) tool* over six synthetic,
 PHI-free vignettes and emits a report.
 
 The example uses a deterministic mock so it runs offline and byte-reproducibly,
